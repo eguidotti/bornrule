@@ -88,6 +88,7 @@ class Experiment:
     def timing_gpu(self, runs=1):
         try:
             import cupy
+            gpu = cupy.cuda.Device()
 
             def to_cupy(x):
                 if sparse.issparse(x):
@@ -104,17 +105,19 @@ class Experiment:
         for run in range(runs):
             print("Start run", run + 1, "of", runs)
             for train_size in (np.arange(10) + 1) / 10:
-                model = BornClassifier()
                 onehot = OneHotEncoder()
                 X_train, X_test, y_train, y_test = self.data.split(train_size=train_size)
                 X_train_gpu, X_test_gpu = to_cupy(X_train), to_cupy(X_test)
                 y_train_gpu = to_cupy(onehot.fit_transform(y_train.reshape(-1, 1)).todense())
                 for _ in ['warmup', 'run']:  # warmup GPU with first run
+                    model = BornClassifier()
                     fit_start = time()
                     model.fit(X_train_gpu, y_train_gpu)
+                    gpu.synchronize()
                     fit_end = time()
                     predict_start = time()
                     y_pred = model.predict(X_test_gpu)
+                    gpu.synchronize()
                     predict_end = time()
                 times.append({
                     'run': run + 1,
