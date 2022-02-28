@@ -133,9 +133,12 @@ class Experiment:
         return times
 
     def plot_timing(self):
-        cpu = pd.read_csv(f"{self.output_dir}/{self.data.dataset}_timing_cpu.csv")
-        gpu = pd.read_csv(f"{self.output_dir}/{self.data.dataset}_timing_gpu.csv")
-        df = pd.concat([cpu, gpu]).groupby(['model', 'train_size']).describe().reset_index()
+        timing = []
+        for device in ['cpu', 'gpu']:
+            file = f"{self.output_dir}/{self.data.dataset}_timing_{device}.csv"
+            if os.path.exists(file):
+                timing.append(pd.read_csv(file))
+        df = pd.concat(timing).groupby(['model', 'train_size']).describe().reset_index()
         df.columns = [' '.join(col).strip() for col in df.columns]
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4))
         plt.tight_layout(pad=3, rect=(0, 0, 1, 0.95))

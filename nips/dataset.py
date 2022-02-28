@@ -2,8 +2,9 @@ import nltk
 import numpy as np
 import pandas as pd
 from scipy import sparse
-from sklearn.datasets import fetch_20newsgroups
 from sklearn.utils import shuffle
+from sklearn.datasets import fetch_20newsgroups
+from sklearn.preprocessing import OneHotEncoder
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
 
@@ -28,7 +29,7 @@ class Dataset:
         url = "https://archive.ics.uci.edu/ml/machine-learning-databases/zoo/zoo.data"
         df = pd.read_csv(url, header=None)
         self.y_train = np.asarray(df.iloc[:, -1])
-        self.X_train = np.asarray(df.iloc[:, 1:-1])
+        self.X_train = OneHotEncoder().fit_transform(df.iloc[:, 1:-1])
 
     def split(self, train_size=1):
         if self.X_test is not None and self.y_test is not None:
