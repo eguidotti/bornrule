@@ -4,6 +4,8 @@ import pandas as pd
 import scipy.sparse as sparse
 import matplotlib.pyplot as plt
 from time import time
+from sklearn.metrics import make_scorer
+from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -19,6 +21,7 @@ class Experiment:
 
     def __init__(self, dataset, score, output_dir="results"):
         self.score = score
+        self.scorer = make_scorer(self.score, greater_is_better=True)
         self.data = Dataset(dataset, output_dir=output_dir)
 
         self.output_dir = output_dir
@@ -27,29 +30,36 @@ class Experiment:
 
         self.models = {
             'LR': (LogisticRegression(), {
-                'C': [0.01, 0.1, 1, 3, 5, 7, 9, 100]
+                'solver': ['saga'],
+                'penalty': ['l1', 'l2', 'elasticnet', 'none'],
+                'C': [0.01, 0.1, 1, 10, 100],
+                'fit_intercept': [True, False]
             }),
             'SVM': (SVC(), {
                 'kernel': ('linear', 'rbf', 'poly', 'sigmoid'),
-                'C': [0.01, 0.1, 1, 3, 5, 7, 9, 100],
-                'degree': range(2, 5)
+                'C': [0.01, 0.1, 1, 10, 100],
+                'gamma': ['scale', 'auto']
             }),
             'MNB': (MultinomialNB(), {
-                'alpha': [0.1, 1, 2],
+                'alpha': [0, 0.1, 0.2, 0.5, 1, 2, 5, 10],
                 'fit_prior': [True, False]
             }),
             'DT': (DecisionTreeClassifier(), {
-                'criterion': ['gini', 'entropy'],
                 'splitter': ['best', 'random'],
-                'min_samples_split': range(2, 8)
+                'criterion': ['gini', 'entropy'],
+                'min_samples_split': [2, 10, 100],
+                'ccp_alpha': [0, 0.1, 1, 10]
             }),
             'RF': (RandomForestClassifier(), {
-                'n_estimators': [10, 60, 100, 200],
+                'n_estimators': [10, 100, 1000],
                 'criterion': ['gini', 'entropy'],
-                'min_samples_split': range(2, 8)
+                'min_samples_split': [2, 10, 100],
+                'ccp_alpha': [0, 0.1, 1, 10]
             }),
             'KNN': (KNeighborsClassifier(), {
-                'n_neighbors': range(1, 10)
+                'p': [1, 2],
+                'n_neighbors': [1, 2, 3, 5, 10, 50, 100],
+                'weights': ['uniform', 'distance']
             }),
             'BC': (BornClassifier(), {
                 # no tuning
@@ -60,13 +70,11 @@ class Experiment:
         times = []
         file = self.output_dir + "/" + self.data.dataset + "_timing_cpu.csv"
         for run in range(runs):
-            print("Start run", run + 1, "of", runs)
-
             for train_size in (np.arange(10) + 1) / 10:
                 X_train, X_test, y_train, y_test = self.data.split(train_size=train_size)
 
                 for name, (model, params) in self.models.items():
-                    print("Doing", name, "with train_size", train_size)
+                    print(f"Run {run + 1}/{runs}: executing {name} with train_size={train_size}")
 
                     fit_start = time()
                     model.fit(X_train, y_train)
@@ -85,10 +93,8 @@ class Experiment:
                         'score': self.score(y_true=y_test, y_pred=y_pred)
                     })
 
-                print("Writing to file", file)
-                pd.DataFrame(times).to_csv(file, index=False)
-
-            print("End run", run + 1, "of", runs)
+                    print("writing to file", file)
+                    pd.DataFrame(times).to_csv(file, index=False)
 
         return times
 
@@ -110,9 +116,9 @@ class Experiment:
         times = []
         file = self.output_dir + "/" + self.data.dataset + "_timing_gpu.csv"
         for run in range(runs):
-            print("Start run", run + 1, "of", runs)
-
             for train_size in (np.arange(10) + 1) / 10:
+                print(f"Run {run + 1}/{runs}: executing BC with train_size={train_size}")
+
                 onehot = OneHotEncoder()
                 X_train, X_test, y_train, y_test = self.data.split(train_size=train_size)
                 X_train_gpu, X_test_gpu = to_cupy(X_train), to_cupy(X_test)
@@ -140,12 +146,41 @@ class Experiment:
                     'score': self.score(y_true=y_test, y_pred=[onehot.categories_[0][y] for y in y_pred.get()])
                 })
 
-                print("Writing to file", file)
+                print("writing to file", file)
                 pd.DataFrame(times).to_csv(file, index=False)
 
-            print("End run", run + 1, "of", runs)
-
         return times
+
+    def cross_validation(self, runs=1):
+        scores = []
+        file = self.output_dir + "/" + self.data.dataset + "_cross_validation.csv"
+        for run in range(runs):
+            X_train, X_test, y_train, y_test = self.data.split()
+
+            for name, (model, parameters) in self.models.items():
+                print(f"Run {run + 1}/{runs}: executing {name}")
+                clf = GridSearchCV(model, parameters, scoring=self.scorer) if parameters is not None else model
+
+                fit_start = time()
+                clf.fit(X_train, y_train)
+                fit_end = time()
+
+                predict_start = time()
+                y_pred = clf.predict(X_test)
+                predict_end = time()
+
+                scores.append({
+                    'run': run + 1,
+                    'model': name,
+                    'fit': fit_end - fit_start,
+                    'predict': predict_end - predict_start,
+                    'score': self.score(y_true=y_test, y_pred=y_pred)
+                })
+
+                print("Writing to file", file)
+                pd.DataFrame(scores).to_csv(file, index=False)
+
+        return scores
 
     def plot_timing(self):
         timing = []
