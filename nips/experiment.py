@@ -10,6 +10,7 @@ from sklearn.tree import DecisionTreeClassifier
 from bornrule import BornClassifier
 from time import time
 import matplotlib.pyplot as plt
+import scipy.sparse as sparse
 import pandas as pd
 import numpy as np
 import os
@@ -87,11 +88,17 @@ class Experiment:
     def timing_gpu(self, runs=1):
         try:
             import cupy
-            from cupyx.profiler import benchmark
+
+            def to_cupy(x):
+                if sparse.issparse(x):
+                    return cupy.sparse.csr_matrix(x)
+                return cupy.array(x)
+
         except ModuleNotFoundError:
             raise ModuleNotFoundError(
                 "CuPy required but not installed. "
                 "Please install CuPy at https://cupy.dev")
+
         times = []
         file = self.output_dir + "/" + self.data.dataset + "_timing_gpu.csv"
         for run in range(runs):
@@ -100,19 +107,21 @@ class Experiment:
                 model = BornClassifier()
                 onehot = OneHotEncoder()
                 X_train, X_test, y_train, y_test = self.data.split(train_size=train_size)
-                y_train_gpu = cupy.sparse.csr_matrix(onehot.fit_transform(y_train.reshape(-1, 1))).todense()
-                X_train_gpu = cupy.sparse.csr_matrix(X_train)
-                X_test_gpu = cupy.sparse.csr_matrix(X_test)
-                time_fit = np.mean(benchmark(model.fit, (X_train_gpu, y_train_gpu), n_repeat=10).gpu_times)
-                time_predict = np.mean(benchmark(model.predict, (X_test_gpu, ), n_repeat=10).gpu_times)
-                model.fit(X_train_gpu, y_train_gpu)
-                y_pred = model.predict(X_test_gpu)
+                X_train_gpu, X_test_gpu = to_cupy(X_train), to_cupy(X_test)
+                y_train_gpu = to_cupy(onehot.fit_transform(y_train.reshape(-1, 1)).todense())
+                for _ in ['warmup', 'run']:  # warmup GPU with first run
+                    fit_start = time()
+                    model.fit(X_train_gpu, y_train_gpu)
+                    fit_end = time()
+                    predict_start = time()
+                    y_pred = model.predict(X_test_gpu)
+                    predict_end = time()
                 times.append({
                     'run': run + 1,
                     'model': "BC (GPU)",
                     'train_size': train_size,
-                    'fit': time_fit,
-                    'predict': time_predict,
+                    'fit': fit_end - fit_start,
+                    'predict': predict_end - predict_start,
                     'score': self.score(y_true=y_test, y_pred=[onehot.categories_[0][y] for y in y_pred.get()])
                 })
                 print("Writing to file", file)
