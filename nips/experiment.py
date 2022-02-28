@@ -1,0 +1,152 @@
+from nips.dataset import Dataset
+from sklearn import metrics
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from bornrule import BornClassifier
+from time import time
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+import os
+
+
+class Experiment:
+
+    def __init__(self, dataset, scoring, output_dir="results"):
+        self.score = getattr(metrics, scoring)
+        self.data = Dataset(dataset)
+
+        self.output_dir = output_dir
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        self.models = {
+            'LR': (LogisticRegression(), {
+                'C': [0.01, 0.1, 1, 3, 5, 7, 9, 100]
+            }),
+            'SVM': (SVC(), {
+                'kernel': ('linear', 'rbf', 'poly', 'sigmoid'),
+                'C': [0.01, 0.1, 1, 3, 5, 7, 9, 100],
+                'degree': range(2, 5)
+            }),
+            'MNB': (MultinomialNB(), {
+                'alpha': [0.1, 1, 2],
+                'fit_prior': [True, False]
+            }),
+            'DT': (DecisionTreeClassifier(), {
+                'criterion': ['gini', 'entropy'],
+                'splitter': ['best', 'random'],
+                'min_samples_split': range(2, 8)
+            }),
+            'RF': (RandomForestClassifier(), {
+                'n_estimators': [10, 60, 100, 200],
+                'criterion': ['gini', 'entropy'],
+                'min_samples_split': range(2, 8)
+            }),
+            'KNN': (KNeighborsClassifier(), {
+                'n_neighbors': range(1, 10)
+            }),
+            'BC': (BornClassifier(), {
+                # no tuning
+            })
+        }
+
+    def timing_cpu(self, runs=1):
+        times = []
+        file = self.output_dir + "/" + self.data.dataset + "_timing_cpu.csv"
+        for run in range(runs):
+            print("Start run", run + 1, "of", runs)
+            for train_size in (np.arange(10) + 1) / 10:
+                X_train, X_test, y_train, y_test = self.data.split(train_size=train_size)
+                for name, (model, params) in self.models.items():
+                    print("Doing", name, "with train_size", train_size)
+                    fit_start = time()
+                    model.fit(X_train, y_train)
+                    fit_end = time()
+                    predict_start = time()
+                    y_pred = model.predict(X_test)
+                    predict_end = time()
+                    times.append({
+                        'run': run+1,
+                        'model': name,
+                        'train_size': train_size,
+                        'fit': fit_end - fit_start,
+                        'predict': predict_end - predict_start,
+                        'score': self.score(y_true=y_test, y_pred=y_pred)
+                    })
+                print("Writing to file", file)
+                pd.DataFrame(times).to_csv(file, index=False)
+            print("End run", run + 1, "of", runs)
+        return times
+
+    def timing_gpu(self, runs=1):
+        try:
+            import cupy
+            from cupyx.profiler import benchmark
+        except ModuleNotFoundError:
+            raise ModuleNotFoundError(
+                "CuPy required but not installed. "
+                "Please install CuPy at https://cupy.dev")
+        times = []
+        file = self.output_dir + "/" + self.data.dataset + "_timing_gpu.csv"
+        for run in range(runs):
+            print("Start run", run + 1, "of", runs)
+            for train_size in (np.arange(10) + 1) / 10:
+                model = BornClassifier()
+                onehot = OneHotEncoder()
+                X_train, X_test, y_train, y_test = self.data.split(train_size=train_size)
+                y_train_gpu = cupy.sparse.csr_matrix(onehot.fit_transform(y_train.reshape(-1, 1))).todense()
+                X_train_gpu = cupy.sparse.csr_matrix(X_train)
+                X_test_gpu = cupy.sparse.csr_matrix(X_test)
+                time_fit = np.mean(benchmark(model.fit, (X_train_gpu, y_train_gpu), n_repeat=10).gpu_times)
+                time_predict = np.mean(benchmark(model.predict, (X_test_gpu, ), n_repeat=10).gpu_times)
+                model.fit(X_train_gpu, y_train_gpu)
+                y_pred = model.predict(X_test_gpu)
+                times.append({
+                    'run': run + 1,
+                    'model': "BC (GPU)",
+                    'train_size': train_size,
+                    'fit': time_fit,
+                    'predict': time_predict,
+                    'score': self.score(y_true=y_test, y_pred=[onehot.categories_[0][y] for y in y_pred.get()])
+                })
+                print("Writing to file", file)
+                pd.DataFrame(times).to_csv(file, index=False)
+            print("End run", run + 1, "of", runs)
+        return times
+
+    def plot_timing(self):
+        cpu = pd.read_csv(f"{self.output_dir}/{self.data.dataset}_timing_cpu.csv")
+        gpu = pd.read_csv(f"{self.output_dir}/{self.data.dataset}_timing_gpu.csv")
+        df = pd.concat([cpu, gpu]).groupby(['model', 'train_size']).describe().reset_index()
+        df.columns = [' '.join(col).strip() for col in df.columns]
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4))
+        plt.tight_layout(pad=3, rect=(0, 0, 1, 0.95))
+        for key, group in df.groupby('model'):
+            args = {'label': key, 'legend': False, 'marker': ".", 'capsize': 2, 'elinewidth': 1}
+            if key.startswith("BC"):
+                args['color'] = 'black'
+            if key == "BC (GPU)":
+                args['linestyle'] = 'dotted'
+                args['marker'] = 'x'
+            group.plot(x='train_size', y='fit mean', yerr='fit std', ax=ax1, **args)
+            group.plot(x='train_size', y='predict mean', yerr='predict std', ax=ax2, **args)
+            group.plot(x='train_size', y='score mean', yerr='score std', ax=ax3, **args)
+        for ax, label in [(ax1, "Training Time (s)"), (ax2, "Prediction Time (s)"), (ax3, "Accuracy Score")]:
+            ax.set_xlabel('Dataset Size\n(fraction of training data)', fontsize=14)
+            ax.set_ylabel(label, fontsize=14)
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            plt.setp(ax.spines.values(), linewidth=1.5)
+            for tick in ax.get_xticklabels() + ax.get_yticklabels():
+                tick.set_fontweight("bold")
+        for ax in [ax1, ax2]:
+            ax.set_yscale('log')
+        handles, labels = ax3.get_legend_handles_labels()
+        fig.legend(handles, labels, loc='upper center', ncol=len(df.model.unique()), prop={"size": 12})
+        fig.savefig(f"{self.output_dir}/{self.data.dataset}_timing.png", bbox_inches='tight', format='png', dpi=300)
