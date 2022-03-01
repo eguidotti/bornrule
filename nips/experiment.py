@@ -159,7 +159,7 @@ class Experiment:
 
             for name, (model, parameters) in self.models.items():
                 print(f"Run {run + 1}/{runs}: executing {name}")
-                clf = GridSearchCV(model, parameters, scoring=self.scorer, n_jobs=-1, verbose=4) if parameters is not None else model
+                clf = GridSearchCV(model, parameters, scoring=self.scorer, verbose=3) if parameters else model
 
                 fit_start = time()
                 clf.fit(X_train, y_train)
