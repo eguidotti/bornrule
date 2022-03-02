@@ -182,6 +182,38 @@ class Experiment:
 
         return scores
 
+    def ablation(self, runs=1):
+        model = BornClassifier()
+        parameters = {
+            'a': [0.01, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+            'b': [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+            'h': [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+        }
+
+        scores = []
+        file = self.output_dir + "/" + self.data.dataset + "_ablation.csv"
+        for run in range(runs):
+            X_train, X_test, y_train, y_test = self.data.split()
+            clf = GridSearchCV(model, parameters, scoring=self.scorer, n_jobs=-1, verbose=3)
+            clf.fit(X_train, y_train)
+            for params, score in zip(clf.cv_results_['params'], clf.cv_results_['mean_test_score']):
+                model.set_params(**params)
+                model.fit(X_train, y_train)
+
+                scores.append({
+                    'run': run,
+                    'a': params['a'],
+                    'b': params['b'],
+                    'h': params['h'],
+                    'score_validation': score,
+                    'score_test': self.scorer(estimator=model, X=X_test, y_true=y_test)
+                })
+
+            print("Writing to file", file)
+            pd.DataFrame(scores).to_csv(file, index=False)
+
+        return scores
+
     def plot_timing(self):
         timing = []
         for device in ['cpu', 'gpu']:
@@ -221,4 +253,33 @@ class Experiment:
         handles, labels = ax3.get_legend_handles_labels()
         fig.legend(handles, labels, loc='upper center', ncol=len(df.model.unique()), prop={"size": 12})
 
-        fig.savefig(f"{self.output_dir}/{self.data.dataset}_timing.png", bbox_inches='tight', format='png', dpi=300)
+        file = f"{self.output_dir}/{self.data.dataset}_timing.png"
+        fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
+        print(f"Image saved in {file}")
+
+    def plot_ablation(self):
+        file = f"{self.output_dir}/{self.data.dataset}_ablation.csv"
+        df = pd.read_csv(file).groupby(['a', 'b', 'h']).mean().reset_index()
+
+        df['size'] = 20
+        df.loc[(df['a'] == 0.5) & (df['b'] == 1) & (df['h'] == 1), 'size'] = 200
+
+        x, y, z = 'b', 'a', 'h'
+        c, s = 'score_test', 'size'
+
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        ax.set_xlabel(x), ax.set_ylabel(y), ax.set_zlabel(z)
+        args = {'cmap': 'inferno', 'edgecolors': 'black', 'linewidths': 0.1, 'depthshade': 0}
+        plot = ax.scatter(df[x], df[y], df[z], c=df[c], s=df[s], **args)
+        fig.colorbar(plot, location='left')
+
+        file = f"{self.output_dir}/{self.data.dataset}_ablation.png"
+        fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
+        print(f"Image saved in {file}")
+
+        cv = df.iloc[df['score_validation'].idxmax()]
+        print(f"Best cross validation score is {cv['score_validation']}, and the test score is {cv['score_test']}")
+
+        bc = df.loc[(df['a'] == 0.5) & (df['b'] == 1) & (df['h'] == 1)].iloc[0]
+        print(f"Born's cross validation score is {bc['score_validation']}, and the test score is {bc['score_test']}")
