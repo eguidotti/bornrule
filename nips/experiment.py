@@ -215,6 +215,24 @@ class Experiment:
 
         return scores
 
+    def explanation(self, top=10):
+        file = self.output_dir + "/" + self.data.dataset + "_explanation.csv"
+
+        model = BornClassifier()
+        weights = model.fit(self.data.X_train, self.data.y_train).explain()
+        classes = model.classes_
+        features = self.data.vectorizer.get_feature_names_out()
+        if sparse.issparse(weights):
+            df = pd.DataFrame.sparse.from_spmatrix(weights, index=features, columns=classes)
+        else:
+            df = pd.DataFrame(weights, index=features, columns=classes)
+
+        print("Writing to file", file)
+        top10 = pd.DataFrame({c: df[c].sort_values(ascending=False).index[0:top] for c in df.columns})
+        top10.to_csv(file, index=True)
+
+        return top10
+
     def plot_timing(self):
         timing = []
         for device in ['cpu', 'gpu']:

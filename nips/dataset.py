@@ -21,6 +21,7 @@ class Dataset:
         self.dataset = dataset
         self.output_dir = output_dir
 
+        self.vectorizer = None
         self.X_train, self.y_train = None, None
         self.X_test, self.y_test = None, None
 
@@ -29,19 +30,23 @@ class Dataset:
     def load_20ng(self):
         train = fetch_20newsgroups(subset='train')
         test = fetch_20newsgroups(subset='test')
-        vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize, lowercase=False)
-
-        self.X_train = vectorizer.fit_transform(train.data)
-        self.X_test = vectorizer.transform(test.data)
-        self.y_train = train.target
-        self.y_test = test.target
+        
+        self.vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize, lowercase=False)
+        self.X_train = self.vectorizer.fit_transform(train.data)
+        self.X_test = self.vectorizer.transform(test.data)
+        self.y_train = np.array([train.target_names[t] for t in train.target])
+        self.y_test = np.array([test.target_names[t] for t in test.target])
 
     def load_zoo(self):
         url = "https://archive.ics.uci.edu/ml/machine-learning-databases/zoo/zoo.data"
-        df = pd.read_csv(url, header=None)
+        labels = {1: 'Mammal', 2: 'Bird', 3: 'Reptile', 4: 'Fish', 5: 'Amphibian', 6: 'Bug', 7: 'Invertebrate'}
+        columns = ['animal name', 'hair', 'feathers', 'eggs', 'milk', 'airborne', 'aquatic', 'predator', 'toothed',
+                   'backbone', 'breathes', 'venomous', 'fins', 'legs', 'tail', 'domestic', 'catsize', 'type']
+        df = pd.read_csv(url, header=None, names=columns).replace({'type': labels})
 
+        self.vectorizer = OneHotEncoder()
+        self.X_train = self.vectorizer.fit_transform(df.iloc[:, 1:-1])
         self.y_train = np.asarray(df.iloc[:, -1])
-        self.X_train = OneHotEncoder().fit_transform(df.iloc[:, 1:-1])
 
     def load_r8(self):
         self.load_reuters('r8')
@@ -60,10 +65,10 @@ class Dataset:
 
         train = [doc for doc in train if doc[1] in labels]
         test = [doc for doc in test if doc[1] in labels]
-        vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize, lowercase=True)
 
-        self.X_train = vectorizer.fit_transform([doc[0] for doc in train])
-        self.X_test = vectorizer.transform([doc[0] for doc in test])
+        self.vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize, lowercase=True)
+        self.X_train = self.vectorizer.fit_transform([doc[0] for doc in train])
+        self.X_test = self.vectorizer.transform([doc[0] for doc in test])
         self.y_train = np.array([doc[1] for doc in train])
         self.y_test = np.array([doc[1] for doc in test])
 
