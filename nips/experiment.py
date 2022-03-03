@@ -158,27 +158,28 @@ class Experiment:
             X_train, X_test, y_train, y_test = self.data.split()
 
             for name, (model, parameters) in self.models.items():
-                print(f"Run {run + 1}/{runs}: executing {name}")
-                clf = GridSearchCV(model, parameters, scoring=self.scorer, verbose=3) if parameters else model
+                if parameters:
+                    print(f"Run {run + 1}/{runs}: executing {name}")
+                    clf = GridSearchCV(model, parameters, scoring=self.scorer, verbose=3)
 
-                fit_start = time()
-                clf.fit(X_train, y_train)
-                fit_end = time()
+                    fit_start = time()
+                    clf.fit(X_train, y_train)
+                    fit_end = time()
 
-                predict_start = time()
-                y_pred = clf.predict(X_test)
-                predict_end = time()
+                    predict_start = time()
+                    y_pred = clf.predict(X_test)
+                    predict_end = time()
 
-                scores.append({
-                    'run': run + 1,
-                    'model': name,
-                    'fit': fit_end - fit_start,
-                    'predict': predict_end - predict_start,
-                    'score': self.score(y_true=y_test, y_pred=y_pred)
-                })
+                    scores.append({
+                        'run': run + 1,
+                        'model': name,
+                        'fit': fit_end - fit_start,
+                        'predict': predict_end - predict_start,
+                        'score': self.score(y_true=y_test, y_pred=y_pred)
+                    })
 
-                print("Writing to file", file)
-                pd.DataFrame(scores).to_csv(file, index=False)
+                    print("Writing to file", file)
+                    pd.DataFrame(scores).to_csv(file, index=False)
 
         return scores
 
