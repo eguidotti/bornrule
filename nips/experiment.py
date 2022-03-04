@@ -245,7 +245,7 @@ class Experiment:
                 net.train()
                 optimizer.zero_grad()
                 outputs = net(inputs.to(dtype).to(device))
-                loss(outputs, labels).backward()
+                loss(outputs, labels.to(device)).backward()
                 optimizer.step()
 
                 net.eval()
