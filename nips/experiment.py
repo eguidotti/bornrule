@@ -15,6 +15,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from bornrule import BornClassifier
+from bornrule.torch import Born
 from .dataset import Dataset
 
 
@@ -234,7 +235,7 @@ class Experiment:
 
         return top10
 
-    def train_and_eval(self, epochs, net, loss, train_loader, test_data, dtype, device):
+    def train_and_eval(self, epochs, net, loss, train_loader, test_data, dtype, device, train=True):
         scores = []
         net = net.to(device)
         optimizer = torch.optim.Adam(net.parameters())
@@ -243,40 +244,59 @@ class Experiment:
 
             for batch_idx, (inputs, labels) in enumerate(train_loader):
                 net.train()
-                optimizer.zero_grad()
-                outputs = net(inputs.to(dtype).to(device))
-                loss(outputs, labels.to(device)).backward()
-                optimizer.step()
+                if train:
+                    optimizer.zero_grad()
+                    outputs = net(inputs.to(dtype).to(device))
+                    loss(outputs, labels.to(device)).backward()
+                    optimizer.step()
 
                 net.eval()
                 with torch.no_grad():
                     inputs, labels = test_data
                     outputs = net(inputs.to(dtype).to(device))
-                    labels = torch.argmax(labels, dim=1).cpu()
-                    pred = torch.argmax(outputs, dim=1).cpu()
+                    y_true = torch.argmax(labels, dim=1).cpu()
+                    y_pred = torch.argmax(outputs, dim=1).cpu()
                     scores.append({
                         'epoch': epoch + (batch_idx + 1) / len(train_loader),
-                        'score': self.score(y_true=labels, y_pred=pred)
+                        'score': self.score(y_true=y_true, y_pred=y_pred),
+                        'loss': loss(outputs, labels.to(device)).item()
                     })
 
         print("done!")
         return scores
 
-    def learning_curve(self, factory, train_loader, test_data, epochs, runs=1, device='cpu'):
+    def learning_curve(self, loss, epochs=1, runs=1, device='cpu'):
         scores = []
         file = self.output_dir + "/" + self.data.dataset + "_learning_curve.csv"
+        in_features, out_features = self.data.X_train.shape[1], len(np.unique(self.data.y_train))
         for run in range(runs):
-            for name, args in factory().items():
-                print(f"--- Run: {run + 1}/{runs}. Model: {name}.")
-                args.update({'train_loader': train_loader, 'test_data': test_data, 'epochs': epochs})
-                for score in self.train_and_eval(device=device, **args):
+            X_train, X_test, y_train, y_test = self.data.split()
+
+            weight = BornClassifier().fit(X_train, y_train).explain()
+            weight = weight / np.mean(weight) / np.sqrt(in_features)
+
+            train_loader, test_data = self.data.to_torch(X_train.power(0.5), X_test.power(0.5), y_train, y_test)
+            nets = self.networks(in_features=in_features, out_features=out_features, weight=weight)
+            for name, args in nets.items():
+                print(f"--- Run: {run + 1}/{runs} ({name}) ---")
+                args.update({
+                    'loss': loss,
+                    'train_loader': train_loader,
+                    'test_data': test_data,
+                    'epochs': epochs,
+                    'device': device
+                })
+
+                for score in self.train_and_eval(**args):
                     score.update({"model": name, 'run': run})
                     scores.append(score)
-            print("Writing to file", file)
-            pd.DataFrame(scores).to_csv(file, index=False)
+
+                print("Writing to file", file)
+                pd.DataFrame(scores).to_csv(file, index=False)
+
         return scores
 
-    def plot_timing(self):
+    def plot_timing(self, score_label='Score'):
         timing = []
         for device in ['cpu', 'gpu']:
             file = f"{self.output_dir}/{self.data.dataset}_timing_{device}.csv"
@@ -300,7 +320,7 @@ class Experiment:
             group.plot(x='train_size', y='predict mean', yerr='predict std', ax=ax2, **args)
             group.plot(x='train_size', y='score mean', yerr='score std', ax=ax3, **args)
 
-        for ax, label in [(ax1, "Training Time (s)"), (ax2, "Prediction Time (s)"), (ax3, "Accuracy Score")]:
+        for ax, label in [(ax1, "Training Time (s)"), (ax2, "Prediction Time (s)"), (ax3, score_label)]:
             ax.set_xlabel('Dataset Size\n(fraction of training data)', fontsize=14)
             ax.set_ylabel(label, fontsize=14)
             ax.spines['right'].set_visible(False)
@@ -346,28 +366,87 @@ class Experiment:
         bc = df.loc[(df['a'] == 0.5) & (df['b'] == 1) & (df['h'] == 1)].iloc[0]
         print(f"Born's cross validation score is {bc['score_validation']}, and the test score is {bc['score_test']}")
 
-    def plot_learning_curve(self):
+    def plot_learning_curve(self, score_label='Score', loss_label='Loss'):
         file = f"{self.output_dir}/{self.data.dataset}_learning_curve.csv"
         df = pd.read_csv(file).groupby(['model', 'epoch']).describe().reset_index()
         df.columns = [' '.join(col).strip() for col in df.columns]
 
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
         for key, group in df.groupby('model'):
             args = {'label': key, 'legend': False, 'capsize': 2, 'elinewidth': 1}
-            group.plot(x='epoch', y='score mean', yerr='score std', ax=ax, **args)
+            group.plot(x='epoch', y='score mean', yerr='score std', ax=ax1, **args)
+            group.plot(x='epoch', y='loss mean', yerr='loss std', ax=ax2, **args)
 
-        ax.set_xscale('log')
-        ax.set_xlabel('Number of Epochs', fontsize=14)
-        ax.set_ylabel('Accuracy Score', fontsize=14)
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)
-        plt.setp(ax.spines.values(), linewidth=1.5)
-        for tick in ax.get_xticklabels() + ax.get_yticklabels():
-            tick.set_fontweight("bold")
+        for ax, label in [(ax1, score_label), (ax2, loss_label)]:
+            ax.set_xscale('log')
+            ax.set_xlabel('Number of Epochs', fontsize=14)
+            ax.set_ylabel(label, fontsize=14)
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            plt.setp(ax.spines.values(), linewidth=1.5)
+            for tick in ax.get_xticklabels() + ax.get_yticklabels():
+                tick.set_fontweight("bold")
 
-        handles, labels = ax.get_legend_handles_labels()
+        handles, labels = ax2.get_legend_handles_labels()
         fig.legend(handles, labels, loc='upper center', ncol=len(df.model.unique()), prop={"size": 12})
 
         file = f"{self.output_dir}/{self.data.dataset}_learning_curve.png"
         fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
         print(f"Image saved in {file}")
+
+    class SoftMax(torch.nn.Module):
+
+        def __init__(self, in_features, out_features):
+            super().__init__()
+            self.linear = torch.nn.Linear(in_features, out_features)
+            self.softmax = torch.nn.Softmax(dim=1)
+
+        def forward(self, x):
+            return self.softmax(self.linear(x))
+
+    class BCBorn(Born):
+
+        def __init__(self, in_features, out_features, weight):
+            super().__init__(in_features=in_features, out_features=out_features)
+            if sparse.issparse(weight):
+                weight = weight.todense()
+            self.weight = torch.nn.Parameter(torch.tensor(weight, dtype=torch.float32))
+
+    def networks(self, in_features, out_features, weight=None):
+        nets = {
+            'Born': {
+                'net': Born(in_features, out_features),
+                'dtype': torch.complex64
+            },
+            'SoftMax': {
+                'net': self.SoftMax(in_features, out_features),
+                'dtype': torch.float32
+            }
+        }
+
+        if weight is not None:
+            nets.update({
+                'BC': {
+                    'net': self.BCBorn(in_features, out_features, weight),
+                    'dtype': torch.float32,
+                    'train': False
+                },
+                'BC+Born': {
+                    'net': self.BCBorn(in_features, out_features, weight),
+                    'dtype': torch.float32
+                }
+            })
+
+        return nets
+
+    @staticmethod
+    def l1_loss(output, target):
+        return torch.nn.functional.l1_loss(output, target)
+
+    @staticmethod
+    def log_loss(output, target):
+        return torch.nn.functional.nll_loss(torch.log(output), torch.argmax(target, dim=1))
+
+    @staticmethod
+    def mse_loss(output, target):
+        return torch.pow(output - target, 2).mean()
