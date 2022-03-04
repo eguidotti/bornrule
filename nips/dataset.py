@@ -123,7 +123,7 @@ class Dataset:
 
         return X_train[:, columns], X_test[:, columns], y_train, y_test
 
-    def to_torch(self, X_train, X_test, y_train, y_test, batch_size=128):
+    def to_torch(self, X_train, X_test, y_train, y_test, batch_size):
         ohe = OneHotEncoder()
         X_train_nn = self.to_tensor(X_train)
         X_test_nn = self.to_tensor(X_test)

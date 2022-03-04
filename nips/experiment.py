@@ -265,18 +265,14 @@ class Experiment:
         print("done!")
         return scores
 
-    def learning_curve(self, loss, epochs=1, runs=1, device='cpu'):
+    def learning_curve(self, loss, epochs=1, runs=1, batch_size=128,  device='cpu'):
         scores = []
         file = self.output_dir + "/" + self.data.dataset + "_learning_curve.csv"
-        in_features, out_features = self.data.X_train.shape[1], len(np.unique(self.data.y_train))
         for run in range(runs):
             X_train, X_test, y_train, y_test = self.data.split()
+            train_loader, test_data = self.data.to_torch(X_train, X_test, y_train, y_test, batch_size)
+            nets = self.networks(X_train, y_train)
 
-            weight = BornClassifier().fit(X_train, y_train).explain()
-            weight = weight / np.mean(weight) / np.sqrt(in_features)
-
-            train_loader, test_data = self.data.to_torch(X_train.power(0.5), X_test.power(0.5), y_train, y_test)
-            nets = self.networks(in_features=in_features, out_features=out_features, weight=weight)
             for name, args in nets.items():
                 print(f"--- Run: {run + 1}/{runs} ({name}) ---")
                 args.update({
@@ -370,13 +366,16 @@ class Experiment:
         file = f"{self.output_dir}/{self.data.dataset}_learning_curve.csv"
         df = pd.read_csv(file).groupby(['model', 'epoch']).describe().reset_index()
         df.columns = [' '.join(col).strip() for col in df.columns]
+        for column in ['score', 'loss']:
+            df[f"{column} err"] = df[f"{column} std"] / np.sqrt(df["run count"])
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
         for key, group in df.groupby('model'):
             args = {'label': key, 'legend': False, 'capsize': 2, 'elinewidth': 1}
-            group.plot(x='epoch', y='score mean', yerr='score std', ax=ax1, **args)
-            group.plot(x='epoch', y='loss mean', yerr='loss std', ax=ax2, **args)
+            group.plot(x='epoch', y='score mean', yerr='score err', ax=ax1, **args)
+            group.plot(x='epoch', y='loss mean', yerr='loss err', ax=ax2, **args)
 
+        ax2.set_yscale('log')
         for ax, label in [(ax1, score_label), (ax2, loss_label)]:
             ax.set_xscale('log')
             ax.set_xlabel('Number of Epochs', fontsize=14)
@@ -406,13 +405,23 @@ class Experiment:
 
     class BCBorn(Born):
 
-        def __init__(self, in_features, out_features, weight):
-            super().__init__(in_features=in_features, out_features=out_features)
+        def __init__(self, X, y):
+            in_features, out_features = X.shape[1], len(np.unique(y))
+
+            weight = BornClassifier().fit(X, y).explain()
+            weight = weight / np.mean(weight) / np.sqrt(in_features)
             if sparse.issparse(weight):
                 weight = weight.todense()
+
+            super().__init__(in_features=in_features, out_features=out_features)
             self.weight = torch.nn.Parameter(torch.tensor(weight, dtype=torch.float32))
 
-    def networks(self, in_features, out_features, weight=None):
+        def forward(self, x):
+            return super().forward(torch.sqrt(x))
+
+    def networks(self, X_train, y_train):
+        in_features, out_features = X_train.shape[1], len(np.unique(y_train))
+
         nets = {
             'Born': {
                 'net': Born(in_features, out_features),
@@ -421,21 +430,17 @@ class Experiment:
             'SoftMax': {
                 'net': self.SoftMax(in_features, out_features),
                 'dtype': torch.float32
+            },
+            'BC': {
+                'net': self.BCBorn(X_train, y_train),
+                'dtype': torch.float32,
+                'train': False
+            },
+            'BC+Born': {
+                'net': self.BCBorn(X_train, y_train),
+                'dtype': torch.float32
             }
         }
-
-        if weight is not None:
-            nets.update({
-                'BC': {
-                    'net': self.BCBorn(in_features, out_features, weight),
-                    'dtype': torch.float32,
-                    'train': False
-                },
-                'BC+Born': {
-                    'net': self.BCBorn(in_features, out_features, weight),
-                    'dtype': torch.float32
-                }
-            })
 
         return nets
 
