@@ -16,5 +16,4 @@ class Born(torch.nn.Module):
         self.weight = torch.nn.Parameter(torch.complex(real=rho*torch.cos(theta), imag=rho*torch.sin(theta)))
         
     def forward(self, x):
-        x = x + 0 * 1j  # see https://github.com/pytorch/pytorch/issues/61909
         return torch.nn.functional.normalize(torch.pow(torch.mm(x, self.weight).abs(), 2), p=1)

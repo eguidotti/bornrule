@@ -1,4 +1,5 @@
 import os
+import torch
 import numpy as np
 import pandas as pd
 import scipy.sparse as sparse
@@ -233,6 +234,47 @@ class Experiment:
 
         return top10
 
+    def train_and_eval(self, epochs, net, loss, train_loader, test_data, dtype):
+        scores = []
+        optimizer = torch.optim.Adam(net.parameters())
+        for epoch in range(epochs):
+            print(f"doing epoch {epoch + 1}/{epochs}...")
+
+            for batch_idx, (inputs, labels) in enumerate(train_loader):
+                net.train()
+                optimizer.zero_grad()
+                outputs = net(inputs.to(dtype))
+                loss(outputs, labels).backward()
+                optimizer.step()
+
+                net.eval()
+                with torch.no_grad():
+                    inputs, labels = test_data
+                    outputs = net(inputs.to(dtype))
+                    labels = torch.argmax(labels, dim=1).cpu()
+                    pred = torch.argmax(outputs, dim=1).cpu()
+                    scores.append({
+                        'epoch': epoch + (batch_idx + 1) / len(train_loader),
+                        'score': self.score(y_true=labels, y_pred=pred)
+                    })
+
+        print("done!")
+        return scores
+
+    def learning_curve(self, factory, train_loader, test_data, epochs, runs=1):
+        scores = []
+        file = self.output_dir + "/" + self.data.dataset + "_learning_curve.csv"
+        for run in range(runs):
+            for name, args in factory().items():
+                print(f"--- Run: {run + 1}/{runs}. Model: {name}.")
+                args.update({'train_loader': train_loader, 'test_data': test_data, 'epochs': epochs})
+                for score in self.train_and_eval(**args):
+                    score.update({"model": name, 'run': run})
+                    scores.append(score)
+            print("Writing to file", file)
+            pd.DataFrame(scores).to_csv(file, index=False)
+        return scores
+
     def plot_timing(self):
         timing = []
         for device in ['cpu', 'gpu']:
@@ -302,3 +344,29 @@ class Experiment:
 
         bc = df.loc[(df['a'] == 0.5) & (df['b'] == 1) & (df['h'] == 1)].iloc[0]
         print(f"Born's cross validation score is {bc['score_validation']}, and the test score is {bc['score_test']}")
+
+    def plot_learning_curve(self):
+        file = f"{self.output_dir}/{self.data.dataset}_learning_curve.csv"
+        df = pd.read_csv(file).groupby(['model', 'epoch']).describe().reset_index()
+        df.columns = [' '.join(col).strip() for col in df.columns]
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        for key, group in df.groupby('model'):
+            args = {'label': key, 'legend': False, 'capsize': 2, 'elinewidth': 1}
+            group.plot(x='epoch', y='score mean', yerr='score std', ax=ax, **args)
+
+        ax.set_xscale('log')
+        ax.set_xlabel('Number of Epochs', fontsize=14)
+        ax.set_ylabel('Accuracy Score', fontsize=14)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        plt.setp(ax.spines.values(), linewidth=1.5)
+        for tick in ax.get_xticklabels() + ax.get_yticklabels():
+            tick.set_fontweight("bold")
+
+        handles, labels = ax.get_legend_handles_labels()
+        fig.legend(handles, labels, loc='upper center', ncol=len(df.model.unique()), prop={"size": 12})
+
+        file = f"{self.output_dir}/{self.data.dataset}_learning_curve.png"
+        fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
+        print(f"Image saved in {file}")
