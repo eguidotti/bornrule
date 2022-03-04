@@ -127,8 +127,8 @@ class Dataset:
         ohe = OneHotEncoder()
         X_train_nn = self.to_tensor(X_train, device=device)
         X_test_nn = self.to_tensor(X_test, device=device)
-        y_train_nn = self.to_tensor(ohe.fit_transform(y_train.reshape(-1, 1)), device=device).to_dense()
-        y_test_nn = self.to_tensor(ohe.transform(y_test.reshape(-1, 1)), device=device).to_dense()
+        y_train_nn = self.to_tensor(ohe.fit_transform(y_train.reshape(-1, 1)).todense(), device=device)
+        y_test_nn = self.to_tensor(ohe.transform(y_test.reshape(-1, 1)).todense(), device=device)
         train_loader = DataLoader(TensorDataset(X_train_nn, y_train_nn), batch_size=batch_size, shuffle=True)
         test_data = (X_test_nn, y_test_nn)
         return train_loader, test_data
