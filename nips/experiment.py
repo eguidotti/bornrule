@@ -234,8 +234,9 @@ class Experiment:
 
         return top10
 
-    def train_and_eval(self, epochs, net, loss, train_loader, test_data, dtype):
+    def train_and_eval(self, epochs, net, loss, train_loader, test_data, dtype, device):
         scores = []
+        net = net.to(device)
         optimizer = torch.optim.Adam(net.parameters())
         for epoch in range(epochs):
             print(f"doing epoch {epoch + 1}/{epochs}...")
@@ -243,14 +244,14 @@ class Experiment:
             for batch_idx, (inputs, labels) in enumerate(train_loader):
                 net.train()
                 optimizer.zero_grad()
-                outputs = net(inputs.to(dtype))
+                outputs = net(inputs.to(dtype).to(device))
                 loss(outputs, labels).backward()
                 optimizer.step()
 
                 net.eval()
                 with torch.no_grad():
                     inputs, labels = test_data
-                    outputs = net(inputs.to(dtype))
+                    outputs = net(inputs.to(dtype).to(device))
                     labels = torch.argmax(labels, dim=1).cpu()
                     pred = torch.argmax(outputs, dim=1).cpu()
                     scores.append({
@@ -261,14 +262,14 @@ class Experiment:
         print("done!")
         return scores
 
-    def learning_curve(self, factory, train_loader, test_data, epochs, runs=1):
+    def learning_curve(self, factory, train_loader, test_data, epochs, runs=1, device='cpu'):
         scores = []
         file = self.output_dir + "/" + self.data.dataset + "_learning_curve.csv"
         for run in range(runs):
             for name, args in factory().items():
                 print(f"--- Run: {run + 1}/{runs}. Model: {name}.")
                 args.update({'train_loader': train_loader, 'test_data': test_data, 'epochs': epochs})
-                for score in self.train_and_eval(**args):
+                for score in self.train_and_eval(device=device, **args):
                     score.update({"model": name, 'run': run})
                     scores.append(score)
             print("Writing to file", file)
