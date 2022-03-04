@@ -235,16 +235,16 @@ class Experiment:
 
         return top10
 
-    def train_and_eval(self, epochs, net, loss, train_loader, test_data, dtype, device, train=True):
+    def train_and_eval(self, net, loss, train_loader, test_data, epochs, dtype, device, train=True):
         scores = []
         net = net.to(device)
         optimizer = torch.optim.Adam(net.parameters())
         for epoch in range(epochs):
             print(f"doing epoch {epoch + 1}/{epochs}...")
-
             for batch_idx, (inputs, labels) in enumerate(train_loader):
-                net.train()
+
                 if train:
+                    net.train()
                     optimizer.zero_grad()
                     outputs = net(inputs.to(dtype).to(device))
                     loss(outputs, labels.to(device)).backward()
@@ -390,6 +390,50 @@ class Experiment:
         fig.legend(handles, labels, loc='upper center', ncol=len(df.model.unique()), prop={"size": 12})
 
         file = f"{self.output_dir}/{self.data.dataset}_learning_curve.png"
+        fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
+        print(f"Image saved in {file}")
+
+    def plot_explanation(self, c, batch_size=128, random_state=123):
+        torch.manual_seed(random_state)
+        X_train, X_test, y_train, y_test = self.data.split(random_state=random_state)
+        train_loader, test_data = self.data.to_torch(X_train, X_test, y_train, y_test, batch_size)
+
+        net = Born(X_train.shape[1], len(np.unique(y_train)))
+        args = {
+            'loss': self.log_loss,
+            'train_loader': train_loader,
+            'test_data': test_data,
+            'epochs': 1,
+            'dtype': torch.complex64,
+            'device': 'cpu'
+        }
+
+        w0 = torch.clone(net.weight.data)
+        self.train_and_eval(net=net, **args)
+        w1 = torch.clone(net.weight.data)
+        self.train_and_eval(net=net, **args)
+        w2 = torch.clone(net.weight.data)
+
+        top = torch.argsort(w2[:, c].abs(), descending=True)
+        names = self.data.vectorizer.get_feature_names_out()
+
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4), subplot_kw={'projection': 'polar'})
+        plt.tight_layout(pad=3, rect=(0, 0, 1, 0.95))
+        for linestyle, marker, idx in [('solid', 'o', top[0:10]), ('dotted', 'x', top[-10:])]:
+            for i in idx:
+                for ax, w in [(ax1, w0), (ax2, w1), (ax3, w2)]:
+                    ax.plot([0, w[i, c].angle()], [0, w[i, c].abs()], 
+                            label=names[i], marker=marker, linestyle=linestyle)
+
+        for ax, title in [(ax1, 'Initial Weights'), (ax2, 'Epoch 1'), (ax3, 'Epoch 2')]:
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_title(title, y=0, pad=-25)
+
+        handles, labels = ax3.get_legend_handles_labels()
+        fig.legend(handles, labels, loc='upper center', ncol=10, prop={"size": 8.5})
+
+        file = f"{self.output_dir}/{self.data.dataset}_explanation.png"
         fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
         print(f"Image saved in {file}")
 

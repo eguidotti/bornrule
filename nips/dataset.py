@@ -108,9 +108,10 @@ class Dataset:
         n_test = self.X_test.shape[0] if self.X_test is not None else None
         return {'n_train': n_train, 'n_test': n_test, 'n_features': n_features, 'n_classes': n_classes}
 
-    def split(self, train_size=1):
+    def split(self, train_size=1, random_state=None):
         if self.X_test is not None and self.y_test is not None:
-            X_train, y_train = shuffle(self.X_train, self.y_train, n_samples=int(train_size * len(self.y_train)))
+            n_samples = int(train_size * len(self.y_train))
+            X_train, y_train = shuffle(self.X_train, self.y_train, n_samples=n_samples, random_state=random_state)
             X_test, y_test = self.X_test, self.y_test
         else:
             X_train, X_test, y_train, y_test = train_test_split(
