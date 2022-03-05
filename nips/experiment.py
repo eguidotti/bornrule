@@ -451,8 +451,8 @@ class Experiment:
                         inputs, labels = test_data
                         outputs = net(inputs.to(dtype))
 
-                        y_true = np.argmax(labels, axis=1)
-                        y_pred = np.argmax(outputs, axis=1)
+                        y_true = torch.argmax(labels, dim=1)
+                        y_pred = torch.argmax(outputs, dim=1)
                         y_score = outputs[:, 1] if outputs.shape[1] == 2 else outputs
 
                         scores.append({
