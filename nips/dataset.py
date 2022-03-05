@@ -2,6 +2,7 @@ import os
 import re
 import nltk
 import tarfile
+import zipfile
 import numpy as np
 import pandas as pd
 from glob import glob
@@ -36,6 +37,25 @@ class Dataset:
         self.X_test = self.vectorizer.transform(test.data)
         self.y_train = np.array([train.target_names[t] for t in train.target])
         self.y_test = np.array([test.target_names[t] for t in test.target])
+
+    def load_htru2(self):
+        url = "https://archive.ics.uci.edu/ml/machine-learning-databases/00372/HTRU2.zip"
+        archive = "HTRU2.zip"
+        data_path = self.output_dir + "/htru2"
+
+        if not os.path.exists(data_path):
+            print("Downloading dataset (once and for all) into %s" % data_path)
+            os.mkdir(data_path)
+            archive_path = os.path.join(data_path, archive)
+            urlretrieve(url, filename=archive_path)
+            print("unzipping HTRU2 dataset...")
+            with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                zip_ref.extractall(data_path)
+            print("done.")
+
+        df = pd.read_csv(self.output_dir + "/htru2/HTRU_2.csv", header=None)
+        self.X_train = np.asarray(df.iloc[:, 0:-1])
+        self.y_train = np.asarray(df.iloc[:, -1])
 
     def load_zoo(self):
         url = "https://archive.ics.uci.edu/ml/machine-learning-databases/zoo/zoo.data"

@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from time import time
 from scipy import sparse
-from sklearn.metrics import make_scorer
+from sklearn import metrics
 from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.ensemble import RandomForestClassifier
@@ -22,9 +22,10 @@ from .networks import BCBorn, SoftMax
 
 class Experiment:
 
-    def __init__(self, dataset, score, output_dir="results"):
+    def __init__(self, dataset, score, loss, output_dir="results"):
+        self.loss = loss
         self.score = score
-        self.scorer = make_scorer(self.score, greater_is_better=True)
+        self.scorer = metrics.make_scorer(self.score, greater_is_better=True)
         self.data = Dataset(dataset, output_dir=output_dir)
 
         self.output_dir = output_dir
@@ -306,7 +307,7 @@ class Experiment:
 
         return top10
 
-    def learning_curve(self, loss, epochs=1, runs=1, batch_size=128):
+    def learning_curve(self, epochs=1, runs=1, batch_size=128):
         scores = []
         file = self.output_dir + "/" + self.data.dataset + "_learning_curve.csv"
         for run in range(runs):
@@ -316,36 +317,34 @@ class Experiment:
 
             nets = {
                 'Born': {
-                    'net': Born(in_features, out_features),
-                    'dtype': torch.complex64
+                    'net': Born(in_features, out_features, dtype=torch.float64),
+                    'dtype': torch.complex128
                 },
                 'SoftMax': {
-                    'net': SoftMax(in_features, out_features),
-                    'dtype': torch.float32
+                    'net': SoftMax(in_features, out_features, dtype=torch.float64),
+                    'dtype': torch.float64
                 },
-                'BC': {
-                    'net': BCBorn(X_train, y_train),
-                    'dtype': torch.float32,
-                    'train': False
-                },
-                'BC+Born': {
-                    'net': BCBorn(X_train, y_train),
-                    'dtype': torch.float32
-                }
             }
+
+            if sparse.issparse(X_train) or (X_train >= 0).all():
+                nets.update({
+                    'BC': {
+                        'net': BCBorn(X_train, y_train, dtype=torch.float64),
+                        'dtype': torch.float64,
+                        'train': False
+                    },
+                    'BC+Born': {
+                        'net': BCBorn(X_train, y_train, dtype=torch.float64),
+                        'dtype': torch.float64
+                    }
+                })
 
             for name, args in nets.items():
                 print(f"--- Run: {run + 1}/{runs} ({name}) ---")
-                args.update({
-                    'loss': loss,
-                    'train_batches': train_batches,
-                    'test_data': test_data,
-                    'epochs': epochs
-                })
-
-                for score in self.train_and_eval(**args):
-                    score.update({"model": name, 'run': run})
-                    scores.append(score)
+                score = self.train_and_eval(train_batches=train_batches, test_data=test_data, epochs=epochs, **args)
+                for s in score:
+                    s.update({"model": name, 'run': run})
+                    scores.append(s)
 
                 print("Writing to file", file)
                 pd.DataFrame(scores).to_csv(file, index=False)
@@ -358,6 +357,9 @@ class Experiment:
         df.columns = [' '.join(col).strip() for col in df.columns]
         for column in ['score', 'loss']:
             df[f"{column} err"] = df[f"{column} std"] / np.sqrt(df["run count"])
+
+        print("--- Score at the last epoch")
+        print(df[df['epoch'] == max(df['epoch'])][['model', 'score mean', 'score err']])
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 3.3))
         plt.tight_layout(pad=3, rect=(0, 0, 1, 0.95))
@@ -391,7 +393,7 @@ class Experiment:
 
         net = Born(X_train.shape[1], len(np.unique(y_train)))
         args = {
-            'loss': self.log_loss,
+            'loss': self.loss,
             'train_batches': train_batches,
             'test_data': test_data,
             'epochs': 1,
@@ -427,7 +429,7 @@ class Experiment:
         fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
         print(f"Image saved in {file}")
 
-    def train_and_eval(self, net, loss, train_batches, test_data, epochs, dtype, train=True):
+    def train_and_eval(self, net, train_batches, test_data, epochs, dtype, train=True):
         scores = []
         n_batches = len(train_batches)
         optimizer = torch.optim.Adam(net.parameters())
@@ -440,20 +442,18 @@ class Experiment:
                     net.train()
                     optimizer.zero_grad()
                     outputs = net(inputs.to(dtype))
-                    loss(outputs, labels).backward()
+                    self.loss(outputs, labels).backward()
                     optimizer.step()
 
-                if batch_idx == n_batches - 1 or epoch < 2:
+                if batch_idx == n_batches - 1 or epoch < 1:
                     net.eval()
                     with torch.no_grad():
                         inputs, labels = test_data
                         outputs = net(inputs.to(dtype))
-                        y_true = torch.argmax(labels, dim=1).cpu()
-                        y_pred = torch.argmax(outputs, dim=1).cpu()
                         scores.append({
                             'epoch': epoch + (batch_idx + 1) / n_batches,
-                            'score': self.score(y_true=y_true, y_pred=y_pred),
-                            'loss': loss(outputs, labels).item()
+                            'score': self.score(outputs, labels),
+                            'loss': self.loss(outputs, labels).item()
                         })
 
         print("done!")
@@ -480,15 +480,3 @@ class Experiment:
             v = torch.tensor(x.data)
             return torch.sparse_coo_tensor(i, v, torch.Size(x.shape))
         return torch.tensor(x)
-
-    @staticmethod
-    def l1_loss(output, target):
-        return torch.nn.functional.l1_loss(output, target)
-
-    @staticmethod
-    def log_loss(output, target):
-        return torch.nn.functional.nll_loss(torch.log(output), torch.argmax(target, dim=1))
-
-    @staticmethod
-    def mse_loss(output, target):
-        return torch.pow(output - target, 2).mean()
