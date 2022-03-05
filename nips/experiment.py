@@ -460,7 +460,7 @@ class Experiment:
         return scores
 
     def to_torch(self, X_train, X_test, y_train, y_test, batch_size):
-        ohe = OneHotEncoder()
+        ohe = OneHotEncoder(handle_unknown='ignore')
         y_train = ohe.fit_transform(y_train.reshape(-1, 1)).todense()
         y_test = ohe.transform(y_test.reshape(-1, 1)).todense()
         train_batches = [(X, y) for X, y in self.to_batch(X_train, y_train, batch_size)]
