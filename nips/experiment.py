@@ -391,13 +391,13 @@ class Experiment:
         X_train, X_test, y_train, y_test = self.data.split(random_state=random_state)
         train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
 
-        net = Born(X_train.shape[1], len(np.unique(y_train)))
+        net = Born(X_train.shape[1], len(np.unique(y_train)), dtype=torch.float32)
         args = {
-            'loss': self.loss,
+            'epochs': 1,
             'train_batches': train_batches,
             'test_data': test_data,
-            'epochs': 1,
-            'dtype': torch.complex64
+            'dtype': torch.complex64,
+            'eval': False
         }
 
         w0 = torch.clone(net.weight.data)
@@ -429,7 +429,7 @@ class Experiment:
         fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
         print(f"Image saved in {file}")
 
-    def train_and_eval(self, net, train_batches, test_data, epochs, dtype, train=True):
+    def train_and_eval(self, net, train_batches, test_data, epochs, dtype, train=True, eval=True):
         scores = []
         n_batches = len(train_batches)
         optimizer = torch.optim.Adam(net.parameters())
@@ -445,7 +445,7 @@ class Experiment:
                     self.loss(outputs, labels).backward()
                     optimizer.step()
 
-                if batch_idx == n_batches - 1 or epoch < 1:
+                if eval and (batch_idx == n_batches - 1 or epoch < 1):
                     net.eval()
                     with torch.no_grad():
                         inputs, labels = test_data
