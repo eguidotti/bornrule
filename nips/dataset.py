@@ -2,7 +2,6 @@ import os
 import re
 import nltk
 import tarfile
-import torch
 import numpy as np
 import pandas as pd
 from glob import glob
@@ -14,7 +13,6 @@ from sklearn.datasets import fetch_20newsgroups
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
-from torch.utils.data import TensorDataset, DataLoader
 
 
 class Dataset:
@@ -123,22 +121,3 @@ class Dataset:
             columns = ~np.all(X_train == 0, axis=0)
 
         return X_train[:, columns], X_test[:, columns], y_train, y_test
-
-    def to_torch(self, X_train, X_test, y_train, y_test, batch_size):
-        ohe = OneHotEncoder()
-        X_train_nn = self.to_tensor(X_train)
-        X_test_nn = self.to_tensor(X_test)
-        y_train_nn = self.to_tensor(ohe.fit_transform(y_train.reshape(-1, 1)).todense())
-        y_test_nn = self.to_tensor(ohe.transform(y_test.reshape(-1, 1)).todense())
-        train_loader = DataLoader(TensorDataset(X_train_nn, y_train_nn), batch_size=batch_size, shuffle=True)
-        test_data = (X_test_nn, y_test_nn)
-        return train_loader, test_data
-
-    @staticmethod
-    def to_tensor(x):
-        if sparse.issparse(x):
-            x = x.tocoo()
-            i = torch.LongTensor(np.vstack((x.row, x.col)))
-            v = torch.tensor(x.data)
-            return torch.sparse_coo_tensor(i, v, torch.Size(x.shape))
-        return torch.tensor(x)

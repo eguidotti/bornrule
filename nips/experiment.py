@@ -217,13 +217,13 @@ class Experiment:
 
         return scores
 
-    def explanation(self, top=10):
+    def table_explanation(self, top=10):
         file = self.output_dir + "/" + self.data.dataset + "_explanation.csv"
 
         model = BornClassifier()
         weights = model.fit(self.data.X_train, self.data.y_train).explain()
-        classes = model.classes_
-        features = self.data.vectorizer.get_feature_names_out()
+        classes, features = model.classes_, self.data.vectorizer.get_feature_names_out()
+
         if sparse.issparse(weights):
             df = pd.DataFrame.sparse.from_spmatrix(weights, index=features, columns=classes)
         else:
@@ -235,52 +235,52 @@ class Experiment:
 
         return top10
 
-    def train_and_eval(self, net, loss, train_loader, test_data, epochs, dtype, device, train=True):
+    def train_and_eval(self, net, loss, train_batches, test_data, epochs, dtype, train=True):
         scores = []
-        net = net.to(device)
+        n_batches = len(train_batches)
         optimizer = torch.optim.Adam(net.parameters())
         for epoch in range(epochs):
             print(f"doing epoch {epoch + 1}/{epochs}...")
-            for batch_idx, (inputs, labels) in enumerate(train_loader):
+            for batch_idx, (inputs, labels) in enumerate(self.shuffle(train_batches)):
 
                 if train:
                     net.train()
                     optimizer.zero_grad()
-                    outputs = net(inputs.to(dtype).to(device))
-                    loss(outputs, labels.to(device)).backward()
+                    outputs = net(inputs.to(dtype))
+                    loss(outputs, labels).backward()
                     optimizer.step()
 
-                net.eval()
-                with torch.no_grad():
-                    inputs, labels = test_data
-                    outputs = net(inputs.to(dtype).to(device))
-                    y_true = torch.argmax(labels, dim=1).cpu()
-                    y_pred = torch.argmax(outputs, dim=1).cpu()
-                    scores.append({
-                        'epoch': epoch + (batch_idx + 1) / len(train_loader),
-                        'score': self.score(y_true=y_true, y_pred=y_pred),
-                        'loss': loss(outputs, labels.to(device)).item()
-                    })
+                if batch_idx == n_batches or epoch < 2:
+                    net.eval()
+                    with torch.no_grad():
+                        inputs, labels = test_data
+                        outputs = net(inputs.to(dtype))
+                        y_true = torch.argmax(labels, dim=1).cpu()
+                        y_pred = torch.argmax(outputs, dim=1).cpu()
+                        scores.append({
+                            'epoch': epoch + (batch_idx + 1) / n_batches,
+                            'score': self.score(y_true=y_true, y_pred=y_pred),
+                            'loss': loss(outputs, labels).item()
+                        })
 
         print("done!")
         return scores
 
-    def learning_curve(self, loss, epochs=1, runs=1, batch_size=128,  device='cpu'):
+    def learning_curve(self, loss, epochs=1, runs=1, batch_size=128):
         scores = []
         file = self.output_dir + "/" + self.data.dataset + "_learning_curve.csv"
         for run in range(runs):
             X_train, X_test, y_train, y_test = self.data.split()
-            train_loader, test_data = self.data.to_torch(X_train, X_test, y_train, y_test, batch_size)
+            train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
             nets = self.networks(X_train, y_train)
 
             for name, args in nets.items():
                 print(f"--- Run: {run + 1}/{runs} ({name}) ---")
                 args.update({
                     'loss': loss,
-                    'train_loader': train_loader,
+                    'train_batches': train_batches,
                     'test_data': test_data,
-                    'epochs': epochs,
-                    'device': device
+                    'epochs': epochs
                 })
 
                 for score in self.train_and_eval(**args):
@@ -302,7 +302,7 @@ class Experiment:
         df = pd.concat(timing).groupby(['model', 'train_size']).describe().reset_index()
         df.columns = [' '.join(col).strip() for col in df.columns]
 
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4))
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 3.3))
         plt.tight_layout(pad=3, rect=(0, 0, 1, 0.95))
 
         for key, group in df.groupby('model'):
@@ -369,7 +369,8 @@ class Experiment:
         for column in ['score', 'loss']:
             df[f"{column} err"] = df[f"{column} std"] / np.sqrt(df["run count"])
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 3.3))
+        plt.tight_layout(pad=3, rect=(0, 0, 1, 0.95))
         for key, group in df.groupby('model'):
             args = {'label': key, 'legend': False, 'capsize': 2, 'elinewidth': 1}
             group.plot(x='epoch', y='score mean', yerr='score err', ax=ax1, **args)
@@ -396,16 +397,15 @@ class Experiment:
     def plot_explanation(self, c, batch_size=128, random_state=123):
         torch.manual_seed(random_state)
         X_train, X_test, y_train, y_test = self.data.split(random_state=random_state)
-        train_loader, test_data = self.data.to_torch(X_train, X_test, y_train, y_test, batch_size)
+        train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
 
         net = Born(X_train.shape[1], len(np.unique(y_train)))
         args = {
             'loss': self.log_loss,
-            'train_loader': train_loader,
+            'train_batches': train_batches,
             'test_data': test_data,
             'epochs': 1,
-            'dtype': torch.complex64,
-            'device': 'cpu'
+            'dtype': torch.complex64
         }
 
         w0 = torch.clone(net.weight.data)
@@ -499,3 +499,29 @@ class Experiment:
     @staticmethod
     def mse_loss(output, target):
         return torch.pow(output - target, 2).mean()
+
+    def to_torch(self, X_train, X_test, y_train, y_test, batch_size):
+        ohe = OneHotEncoder()
+        y_train = ohe.fit_transform(y_train.reshape(-1, 1)).todense()
+        y_test = ohe.transform(y_test.reshape(-1, 1)).todense()
+        train_batches = [(X, y) for X, y in self.to_batch(X_train, y_train, batch_size)]
+        test_data = (self.to_tensor(X_test), self.to_tensor(y_test))
+        return train_batches, test_data
+
+    def to_batch(self, X, y, batch_size):
+        idxs = np.arange(X.shape[0])
+        for batch_idxs in np.array_split(idxs, batch_size):
+            yield self.to_tensor(X[batch_idxs]), self.to_tensor(y[batch_idxs])
+
+    @staticmethod
+    def to_tensor(x):
+        if sparse.issparse(x):
+            x = x.tocoo()
+            i = torch.LongTensor(np.vstack((x.row, x.col)))
+            v = torch.tensor(x.data)
+            return torch.sparse_coo_tensor(i, v, torch.Size(x.shape))
+        return torch.tensor(x)
+
+    @staticmethod
+    def shuffle(x):
+        return [x[i] for i in torch.randperm(len(x))]
