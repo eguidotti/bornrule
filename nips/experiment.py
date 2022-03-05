@@ -279,7 +279,7 @@ class Experiment:
         fig = plt.figure()
         ax = fig.gca(projection='3d')
         ax.set_xlabel(x), ax.set_ylabel(y), ax.set_zlabel(z)
-        args = {'cmap': 'inferno', 'edgecolors': 'black', 'linewidths': 0.1, 'depthshade': 0}
+        args = {'cmap': 'ocean', 'edgecolors': 'black', 'linewidths': 0.1, 'depthshade': 0}
         plot = ax.scatter(df[x], df[y], df[z], c=df[c], s=df[s], **args)
         fig.colorbar(plot, location='left')
 
