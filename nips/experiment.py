@@ -22,12 +22,12 @@ from .networks import BCBorn, SoftMax
 
 class Experiment:
 
-    def __init__(self, dataset, score, loss, output_dir="results"):
+    def __init__(self, dataset, loss, score, needs_proba=False, output_dir="results"):
         self.loss = loss
-        self.score = score
-        self.scorer = metrics.make_scorer(self.score, greater_is_better=True)
-        self.data = Dataset(dataset, output_dir=output_dir)
+        self.score, self.needs_proba = score, needs_proba
+        self.scorer = metrics.make_scorer(self.score, greater_is_better=True, needs_proba=needs_proba)
 
+        self.data = Dataset(dataset, output_dir=output_dir)
         self.output_dir = output_dir
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -85,7 +85,7 @@ class Experiment:
                     fit_end = time()
 
                     predict_start = time()
-                    y_pred = model.predict(X_test)
+                    y_pred = model.predict_proba(X_test) if self.needs_proba else model.predict(X_test)
                     predict_end = time()
 
                     times.append({
@@ -94,7 +94,7 @@ class Experiment:
                         'train_size': train_size,
                         'fit': fit_end - fit_start,
                         'predict': predict_end - predict_start,
-                        'score': self.score(y_true=y_test, y_pred=y_pred)
+                        'score': self.score(y_test, y_pred)
                     })
 
                     print("writing to file", file)
@@ -137,7 +137,7 @@ class Experiment:
                     fit_end = time()
 
                     predict_start = time()
-                    y_pred = model.predict(X_test_gpu)
+                    y_pred = model.predict_proba(X_test_gpu) if self.needs_proba else model.predict(X_test_gpu)
                     gpu.synchronize()
                     predict_end = time()
 
@@ -147,7 +147,7 @@ class Experiment:
                     'train_size': train_size,
                     'fit': fit_end - fit_start,
                     'predict': predict_end - predict_start,
-                    'score': self.score(y_true=y_test, y_pred=[onehot.categories_[0][y] for y in y_pred.get()])
+                    'score': self.score(y_test, y_pred.get())
                 })
 
                 print("writing to file", file)
@@ -214,7 +214,7 @@ class Experiment:
                     fit_end = time()
 
                     predict_start = time()
-                    y_pred = clf.predict(X_test)
+                    y_pred = clf.predict_proba(X_test) if self.needs_proba else clf.predict(X_test)
                     predict_end = time()
 
                     scores.append({
@@ -222,7 +222,7 @@ class Experiment:
                         'model': name,
                         'fit': fit_end - fit_start,
                         'predict': predict_end - predict_start,
-                        'score': self.score(y_true=y_test, y_pred=y_pred)
+                        'score': self.score(y_test, y_pred)
                     })
 
                     print("Writing to file", file)
@@ -450,9 +450,14 @@ class Experiment:
                     with torch.no_grad():
                         inputs, labels = test_data
                         outputs = net(inputs.to(dtype))
+
+                        y_true = np.argmax(labels, axis=1)
+                        y_pred = np.argmax(outputs, axis=1)
+                        y_score = outputs[:, 1] if outputs.shape[1] == 2 else outputs
+
                         scores.append({
                             'epoch': epoch + (batch_idx + 1) / n_batches,
-                            'score': self.score(outputs, labels),
+                            'score': self.score(y_true, y_score if self.needs_proba else y_pred),
                             'loss': self.loss(outputs, labels).item()
                         })
 
