@@ -443,7 +443,7 @@ class Experiment:
                     loss(outputs, labels).backward()
                     optimizer.step()
 
-                if batch_idx == n_batches or epoch < 2:
+                if batch_idx == n_batches - 1 or epoch < 2:
                     net.eval()
                     with torch.no_grad():
                         inputs, labels = test_data
