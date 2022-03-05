@@ -2,9 +2,9 @@ import os
 import torch
 import numpy as np
 import pandas as pd
-import scipy.sparse as sparse
 import matplotlib.pyplot as plt
 from time import time
+from scipy import sparse
 from sklearn.metrics import make_scorer
 from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import OneHotEncoder
@@ -17,6 +17,7 @@ from sklearn.tree import DecisionTreeClassifier
 from bornrule import BornClassifier
 from bornrule.torch import Born
 from .dataset import Dataset
+from .networks import BCBorn, SoftMax
 
 
 class Experiment:
@@ -153,145 +154,6 @@ class Experiment:
 
         return times
 
-    def cross_validation(self, runs=1):
-        scores = []
-        file = self.output_dir + "/" + self.data.dataset + "_cross_validation.csv"
-        for run in range(runs):
-            X_train, X_test, y_train, y_test = self.data.split()
-
-            for name, (model, parameters) in self.models.items():
-                if parameters:
-                    print(f"Run {run + 1}/{runs}: executing {name}")
-                    clf = GridSearchCV(model, parameters, scoring=self.scorer, verbose=3)
-
-                    fit_start = time()
-                    clf.fit(X_train, y_train)
-                    fit_end = time()
-
-                    predict_start = time()
-                    y_pred = clf.predict(X_test)
-                    predict_end = time()
-
-                    scores.append({
-                        'run': run + 1,
-                        'model': name,
-                        'fit': fit_end - fit_start,
-                        'predict': predict_end - predict_start,
-                        'score': self.score(y_true=y_test, y_pred=y_pred)
-                    })
-
-                    print("Writing to file", file)
-                    pd.DataFrame(scores).to_csv(file, index=False)
-
-        return scores
-
-    def ablation(self, runs=1):
-        model = BornClassifier()
-        parameters = {
-            'a': [0.01, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
-            'b': [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
-            'h': [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
-        }
-
-        scores = []
-        file = self.output_dir + "/" + self.data.dataset + "_ablation.csv"
-        for run in range(runs):
-            X_train, X_test, y_train, y_test = self.data.split()
-            clf = GridSearchCV(model, parameters, scoring=self.scorer, n_jobs=-1, verbose=3)
-            clf.fit(X_train, y_train)
-            for params, score in zip(clf.cv_results_['params'], clf.cv_results_['mean_test_score']):
-                model.set_params(**params)
-                model.fit(X_train, y_train)
-
-                scores.append({
-                    'run': run,
-                    'a': params['a'],
-                    'b': params['b'],
-                    'h': params['h'],
-                    'score_validation': score,
-                    'score_test': self.scorer(estimator=model, X=X_test, y_true=y_test)
-                })
-
-            print("Writing to file", file)
-            pd.DataFrame(scores).to_csv(file, index=False)
-
-        return scores
-
-    def table_explanation(self, top=10):
-        file = self.output_dir + "/" + self.data.dataset + "_explanation.csv"
-
-        model = BornClassifier()
-        weights = model.fit(self.data.X_train, self.data.y_train).explain()
-        classes, features = model.classes_, self.data.vectorizer.get_feature_names_out()
-
-        if sparse.issparse(weights):
-            df = pd.DataFrame.sparse.from_spmatrix(weights, index=features, columns=classes)
-        else:
-            df = pd.DataFrame(weights, index=features, columns=classes)
-
-        print("Writing to file", file)
-        top10 = pd.DataFrame({c: df[c].sort_values(ascending=False).index[0:top] for c in df.columns})
-        top10.to_csv(file, index=True)
-
-        return top10
-
-    def train_and_eval(self, net, loss, train_batches, test_data, epochs, dtype, train=True):
-        scores = []
-        n_batches = len(train_batches)
-        optimizer = torch.optim.Adam(net.parameters())
-        for epoch in range(epochs):
-            print(f"doing epoch {epoch + 1}/{epochs}...")
-            for batch_idx, (inputs, labels) in enumerate(self.shuffle(train_batches)):
-
-                if train:
-                    net.train()
-                    optimizer.zero_grad()
-                    outputs = net(inputs.to(dtype))
-                    loss(outputs, labels).backward()
-                    optimizer.step()
-
-                if batch_idx == n_batches or epoch < 2:
-                    net.eval()
-                    with torch.no_grad():
-                        inputs, labels = test_data
-                        outputs = net(inputs.to(dtype))
-                        y_true = torch.argmax(labels, dim=1).cpu()
-                        y_pred = torch.argmax(outputs, dim=1).cpu()
-                        scores.append({
-                            'epoch': epoch + (batch_idx + 1) / n_batches,
-                            'score': self.score(y_true=y_true, y_pred=y_pred),
-                            'loss': loss(outputs, labels).item()
-                        })
-
-        print("done!")
-        return scores
-
-    def learning_curve(self, loss, epochs=1, runs=1, batch_size=128):
-        scores = []
-        file = self.output_dir + "/" + self.data.dataset + "_learning_curve.csv"
-        for run in range(runs):
-            X_train, X_test, y_train, y_test = self.data.split()
-            train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
-            nets = self.networks(X_train, y_train)
-
-            for name, args in nets.items():
-                print(f"--- Run: {run + 1}/{runs} ({name}) ---")
-                args.update({
-                    'loss': loss,
-                    'train_batches': train_batches,
-                    'test_data': test_data,
-                    'epochs': epochs
-                })
-
-                for score in self.train_and_eval(**args):
-                    score.update({"model": name, 'run': run})
-                    scores.append(score)
-
-                print("Writing to file", file)
-                pd.DataFrame(scores).to_csv(file, index=False)
-
-        return scores
-
     def plot_timing(self, score_label='Score'):
         timing = []
         for device in ['cpu', 'gpu']:
@@ -335,6 +197,70 @@ class Experiment:
         fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
         print(f"Image saved in {file}")
 
+    def cross_validation(self, runs=1):
+        scores = []
+        file = self.output_dir + "/" + self.data.dataset + "_cross_validation.csv"
+        for run in range(runs):
+            X_train, X_test, y_train, y_test = self.data.split()
+
+            for name, (model, parameters) in self.models.items():
+                if parameters:
+                    print(f"Run {run + 1}/{runs}: executing {name}")
+                    clf = GridSearchCV(model, parameters, scoring=self.scorer, verbose=3)
+
+                    fit_start = time()
+                    clf.fit(X_train, y_train)
+                    fit_end = time()
+
+                    predict_start = time()
+                    y_pred = clf.predict(X_test)
+                    predict_end = time()
+
+                    scores.append({
+                        'run': run + 1,
+                        'model': name,
+                        'fit': fit_end - fit_start,
+                        'predict': predict_end - predict_start,
+                        'score': self.score(y_true=y_test, y_pred=y_pred)
+                    })
+
+                    print("Writing to file", file)
+                    pd.DataFrame(scores).to_csv(file, index=False)
+
+        return scores
+
+    def ablation_study(self, runs=1):
+        model = BornClassifier()
+        parameters = {
+            'a': [0.01, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+            'b': [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+            'h': [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+        }
+
+        scores = []
+        file = self.output_dir + "/" + self.data.dataset + "_ablation.csv"
+        for run in range(runs):
+            X_train, X_test, y_train, y_test = self.data.split()
+            clf = GridSearchCV(model, parameters, scoring=self.scorer, n_jobs=-1, verbose=3)
+            clf.fit(X_train, y_train)
+            for params, score in zip(clf.cv_results_['params'], clf.cv_results_['mean_test_score']):
+                model.set_params(**params)
+                model.fit(X_train, y_train)
+
+                scores.append({
+                    'run': run,
+                    'a': params['a'],
+                    'b': params['b'],
+                    'h': params['h'],
+                    'score_validation': score,
+                    'score_test': self.scorer(estimator=model, X=X_test, y_true=y_test)
+                })
+
+            print("Writing to file", file)
+            pd.DataFrame(scores).to_csv(file, index=False)
+
+        return scores
+
     def plot_ablation(self):
         file = f"{self.output_dir}/{self.data.dataset}_ablation.csv"
         df = pd.read_csv(file).groupby(['a', 'b', 'h']).mean().reset_index()
@@ -361,6 +287,70 @@ class Experiment:
 
         bc = df.loc[(df['a'] == 0.5) & (df['b'] == 1) & (df['h'] == 1)].iloc[0]
         print(f"Born's cross validation score is {bc['score_validation']}, and the test score is {bc['score_test']}")
+
+    def table_explanation(self, top=10):
+        file = self.output_dir + "/" + self.data.dataset + "_explanation.csv"
+
+        model = BornClassifier()
+        weights = model.fit(self.data.X_train, self.data.y_train).explain()
+        classes, features = model.classes_, self.data.vectorizer.get_feature_names_out()
+
+        if sparse.issparse(weights):
+            df = pd.DataFrame.sparse.from_spmatrix(weights, index=features, columns=classes)
+        else:
+            df = pd.DataFrame(weights, index=features, columns=classes)
+
+        print("Writing to file", file)
+        top10 = pd.DataFrame({c: df[c].sort_values(ascending=False).index[0:top] for c in df.columns})
+        top10.to_csv(file, index=True)
+
+        return top10
+
+    def learning_curve(self, loss, epochs=1, runs=1, batch_size=128):
+        scores = []
+        file = self.output_dir + "/" + self.data.dataset + "_learning_curve.csv"
+        for run in range(runs):
+            X_train, X_test, y_train, y_test = self.data.split()
+            in_features, out_features = X_train.shape[1], len(np.unique(y_train))
+            train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
+
+            nets = {
+                'Born': {
+                    'net': Born(in_features, out_features),
+                    'dtype': torch.complex64
+                },
+                'SoftMax': {
+                    'net': SoftMax(in_features, out_features),
+                    'dtype': torch.float32
+                },
+                'BC': {
+                    'net': BCBorn(X_train, y_train),
+                    'dtype': torch.float32,
+                    'train': False
+                },
+                'BC+Born': {
+                    'net': BCBorn(X_train, y_train),
+                    'dtype': torch.float32
+                }
+            }
+
+            for name, args in nets.items():
+                print(f"--- Run: {run + 1}/{runs} ({name}) ---")
+                args.update({
+                    'loss': loss,
+                    'train_batches': train_batches,
+                    'test_data': test_data,
+                    'epochs': epochs
+                })
+
+                for score in self.train_and_eval(**args):
+                    score.update({"model": name, 'run': run})
+                    scores.append(score)
+
+                print("Writing to file", file)
+                pd.DataFrame(scores).to_csv(file, index=False)
+
+        return scores
 
     def plot_learning_curve(self, score_label='Score', loss_label='Loss'):
         file = f"{self.output_dir}/{self.data.dataset}_learning_curve.csv"
@@ -422,7 +412,7 @@ class Experiment:
         for linestyle, marker, idx in [('solid', 'o', top[0:10]), ('dotted', 'x', top[-10:])]:
             for i in idx:
                 for ax, w in [(ax1, w0), (ax2, w1), (ax3, w2)]:
-                    ax.plot([0, w[i, c].angle()], [0, w[i, c].abs()], 
+                    ax.plot([0, w[i, c].angle()], [0, w[i, c].abs()],
                             label=names[i], marker=marker, linestyle=linestyle)
 
         for ax, title in [(ax1, 'Initial Weights'), (ax2, 'Epoch 1'), (ax3, 'Epoch 2')]:
@@ -437,68 +427,37 @@ class Experiment:
         fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
         print(f"Image saved in {file}")
 
-    class SoftMax(torch.nn.Module):
+    def train_and_eval(self, net, loss, train_batches, test_data, epochs, dtype, train=True):
+        scores = []
+        n_batches = len(train_batches)
+        optimizer = torch.optim.Adam(net.parameters())
+        for epoch in range(epochs):
+            print(f"doing epoch {epoch + 1}/{epochs}...")
+            shuffle = [train_batches[i] for i in torch.randperm(len(train_batches))]
+            for batch_idx, (inputs, labels) in enumerate(shuffle):
 
-        def __init__(self, in_features, out_features):
-            super().__init__()
-            self.linear = torch.nn.Linear(in_features, out_features)
-            self.softmax = torch.nn.Softmax(dim=1)
+                if train:
+                    net.train()
+                    optimizer.zero_grad()
+                    outputs = net(inputs.to(dtype))
+                    loss(outputs, labels).backward()
+                    optimizer.step()
 
-        def forward(self, x):
-            return self.softmax(self.linear(x))
+                if batch_idx == n_batches or epoch < 2:
+                    net.eval()
+                    with torch.no_grad():
+                        inputs, labels = test_data
+                        outputs = net(inputs.to(dtype))
+                        y_true = torch.argmax(labels, dim=1).cpu()
+                        y_pred = torch.argmax(outputs, dim=1).cpu()
+                        scores.append({
+                            'epoch': epoch + (batch_idx + 1) / n_batches,
+                            'score': self.score(y_true=y_true, y_pred=y_pred),
+                            'loss': loss(outputs, labels).item()
+                        })
 
-    class BCBorn(Born):
-
-        def __init__(self, X, y):
-            in_features, out_features = X.shape[1], len(np.unique(y))
-
-            weight = BornClassifier().fit(X, y).explain()
-            weight = weight / np.mean(weight) / np.sqrt(in_features)
-            if sparse.issparse(weight):
-                weight = weight.todense()
-
-            super().__init__(in_features=in_features, out_features=out_features)
-            self.weight = torch.nn.Parameter(torch.tensor(weight, dtype=torch.float32))
-
-        def forward(self, x):
-            return super().forward(torch.sqrt(x))
-
-    def networks(self, X_train, y_train):
-        in_features, out_features = X_train.shape[1], len(np.unique(y_train))
-
-        nets = {
-            'Born': {
-                'net': Born(in_features, out_features),
-                'dtype': torch.complex64
-            },
-            'SoftMax': {
-                'net': self.SoftMax(in_features, out_features),
-                'dtype': torch.float32
-            },
-            'BC': {
-                'net': self.BCBorn(X_train, y_train),
-                'dtype': torch.float32,
-                'train': False
-            },
-            'BC+Born': {
-                'net': self.BCBorn(X_train, y_train),
-                'dtype': torch.float32
-            }
-        }
-
-        return nets
-
-    @staticmethod
-    def l1_loss(output, target):
-        return torch.nn.functional.l1_loss(output, target)
-
-    @staticmethod
-    def log_loss(output, target):
-        return torch.nn.functional.nll_loss(torch.log(output), torch.argmax(target, dim=1))
-
-    @staticmethod
-    def mse_loss(output, target):
-        return torch.pow(output - target, 2).mean()
+        print("done!")
+        return scores
 
     def to_torch(self, X_train, X_test, y_train, y_test, batch_size):
         ohe = OneHotEncoder()
@@ -523,5 +482,13 @@ class Experiment:
         return torch.tensor(x)
 
     @staticmethod
-    def shuffle(x):
-        return [x[i] for i in torch.randperm(len(x))]
+    def l1_loss(output, target):
+        return torch.nn.functional.l1_loss(output, target)
+
+    @staticmethod
+    def log_loss(output, target):
+        return torch.nn.functional.nll_loss(torch.log(output), torch.argmax(target, dim=1))
+
+    @staticmethod
+    def mse_loss(output, target):
+        return torch.pow(output - target, 2).mean()
