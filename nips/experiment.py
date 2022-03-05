@@ -137,9 +137,13 @@ class Experiment:
                     fit_end = time()
 
                     predict_start = time()
-                    y_pred = model.predict_proba(X_test_gpu) if self.needs_proba else model.predict(X_test_gpu)
+                    y_pred_gpu = model.predict_proba(X_test_gpu) if self.needs_proba else model.predict(X_test_gpu)
                     gpu.synchronize()
                     predict_end = time()
+
+                y_pred = y_pred_gpu.get()
+                if not self.needs_proba:
+                    y_pred = [onehot.categories_[0][y] for y in y_pred]
 
                 times.append({
                     'run': run + 1,
@@ -147,7 +151,7 @@ class Experiment:
                     'train_size': train_size,
                     'fit': fit_end - fit_start,
                     'predict': predict_end - predict_start,
-                    'score': self.score(y_test, y_pred.get())
+                    'score': self.score(y_test, y_pred)
                 })
 
                 print("writing to file", file)
