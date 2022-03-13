@@ -38,4 +38,16 @@ from bornrule.sql import BornClassifierSQL
 - Use for in-database classification
 - Supports inputs represented as json `{key: value, ...}`
 
+## Paper replication
 
+Install the dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run the script `nips.py`. It takes several days to complete. 
+You may consider modifying the parameters for a first run. 
+
+All the results are obtained using Python 3.9 on a Google Cloud Virtual Machine equipped with 
+CentOS 7, 12 vCPU Intel Cascade Lake 85 GB RAM, 1 GPU NVIDIA Tesla A100.

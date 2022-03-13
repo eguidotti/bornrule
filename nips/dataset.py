@@ -3,6 +3,7 @@ import re
 import nltk
 import tarfile
 import zipfile
+import warnings
 import numpy as np
 import pandas as pd
 from glob import glob
@@ -14,6 +15,14 @@ from sklearn.datasets import fetch_20newsgroups
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
+from collections import Counter
+from pmlb import fetch_data
+
+try:
+    from rdkit.Chem import MolFromSmiles
+    from rdkit.Chem.rdMolDescriptors import GetMorganFingerprintAsBitVect
+except ModuleNotFoundError:
+    warnings.warn("rdkit not installed: some (chemical) dataset may not work.")
 
 
 class Dataset:
@@ -26,7 +35,12 @@ class Dataset:
         self.X_train, self.y_train = None, None
         self.X_test, self.y_test = None, None
 
-        getattr(self, f"load_{dataset}")()
+        if hasattr(self, f"load_{dataset}"):
+            getattr(self, f"load_{dataset}")()
+
+        else:
+            df = fetch_data(dataset, local_cache_dir=self.output_dir)
+            self.X_train, self.y_train = self.X_y(df, 'target')
 
     def load_20ng(self):
         train = fetch_20newsgroups(subset='train')
@@ -37,6 +51,32 @@ class Dataset:
         self.X_test = self.vectorizer.transform(test.data)
         self.y_train = np.array([train.target_names[t] for t in train.target])
         self.y_test = np.array([test.target_names[t] for t in test.target])
+
+    def load_hiv(self):
+        url = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/HIV.csv"
+        data_path = self.output_dir + "/hiv"
+
+        if not os.path.exists(data_path):
+            print("Downloading dataset (once and for all) into %s" % data_path)
+            os.mkdir(data_path)
+            urlretrieve(url, filename=data_path + "/hiv.csv")
+            print("done.")
+
+        df = pd.read_csv(data_path + "/hiv.csv")
+        self.X_train, self.y_train = self.smiles_to_ecfp(df['smiles']), np.asarray(df['HIV_active'])
+
+    def load_bace(self):
+        url = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/bace.csv"
+        data_path = self.output_dir + "/bace"
+
+        if not os.path.exists(data_path):
+            print("Downloading dataset (once and for all) into %s" % data_path)
+            os.mkdir(data_path)
+            urlretrieve(url, filename=data_path + "/bace.csv")
+            print("done.")
+
+        df = pd.read_csv(data_path + "/bace.csv")
+        self.X_train, self.y_train = self.smiles_to_ecfp(df['mol']), np.asarray(df['Class'])
 
     def load_htru2(self):
         url = "https://archive.ics.uci.edu/ml/machine-learning-databases/00372/HTRU2.zip"
@@ -120,12 +160,6 @@ class Dataset:
 
         return train, test
 
-    def summary(self):
-        n_classes = len(np.unique(self.y_train))
-        n_train, n_features = self.X_train.shape
-        n_test = self.X_test.shape[0] if self.X_test is not None else None
-        return {'n_train': n_train, 'n_test': n_test, 'n_features': n_features, 'n_classes': n_classes}
-
     def split(self, train_size=1, random_state=None):
         if self.X_test is not None and self.y_test is not None:
             n_samples = int(train_size * len(self.y_train))
@@ -141,3 +175,25 @@ class Dataset:
             columns = ~np.all(X_train == 0, axis=0)
 
         return X_train[:, columns], X_test[:, columns], y_train, y_test
+
+    def summary(self):
+        n_train, n_features = self.X_train.shape
+        n_test = self.X_test.shape[0] if self.X_test is not None else None
+        return {'n_train': n_train, 'n_test': n_test, 'n_features': n_features, 'classes': Counter(self.y_train)}
+
+    @staticmethod
+    def X_y(df, target):
+        categorical = []
+        for i, dtype in df.dtypes.iteritems():
+            if i == target:
+                continue
+            elif pd.api.types.is_integer_dtype(dtype):
+                categorical.append(i)
+            else:
+                warnings.warn(f"Skipping feature '{i}'")
+
+        return OneHotEncoder().fit_transform(df[categorical]), np.array(df[target])
+
+    @staticmethod
+    def smiles_to_ecfp(smiles):
+        return sparse.csr_matrix(np.array([GetMorganFingerprintAsBitVect(MolFromSmiles(s), radius=2) for s in smiles]))

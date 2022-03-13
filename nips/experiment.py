@@ -39,8 +39,9 @@ class Experiment:
                 'C': [0.01, 0.1, 1, 10, 100],
                 'fit_intercept': [True, False]
             }),
-            'SVM': (SVC(), {
-                'kernel': ('linear', 'rbf', 'poly', 'sigmoid'),
+            'SVM': (SVC(probability=self.needs_proba), {
+                'probability': [self.needs_proba],
+                'kernel': ['linear', 'rbf', 'poly', 'sigmoid'],
                 'C': [0.01, 0.1, 1, 10, 100],
                 'gamma': ['scale', 'auto']
             }),
@@ -87,6 +88,9 @@ class Experiment:
                     predict_start = time()
                     y_pred = model.predict_proba(X_test) if self.needs_proba else model.predict(X_test)
                     predict_end = time()
+
+                    if self.needs_proba and y_pred.shape[1] == 2:
+                        y_pred = y_pred[:, 1]
 
                     times.append({
                         'run': run+1,
@@ -144,6 +148,8 @@ class Experiment:
                 y_pred = y_pred_gpu.get()
                 if not self.needs_proba:
                     y_pred = [onehot.categories_[0][y] for y in y_pred]
+                elif y_pred.shape[1] == 2:
+                    y_pred = y_pred[:, 1]
 
                 times.append({
                     'run': run + 1,
@@ -168,6 +174,8 @@ class Experiment:
 
         df = pd.concat(timing).groupby(['model', 'train_size']).describe().reset_index()
         df.columns = [' '.join(col).strip() for col in df.columns]
+        for column in ['fit', 'predict', 'score']:
+            df[f"{column} err"] = df[f"{column} std"] / np.sqrt(df["run count"])
 
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 3.3))
         plt.tight_layout(pad=3, rect=(0, 0, 1, 0.95))
@@ -179,9 +187,9 @@ class Experiment:
             if key == "BC (GPU)":
                 args['linestyle'] = 'dotted'
                 args['marker'] = 'x'
-            group.plot(x='train_size', y='fit mean', yerr='fit std', ax=ax1, **args)
-            group.plot(x='train_size', y='predict mean', yerr='predict std', ax=ax2, **args)
-            group.plot(x='train_size', y='score mean', yerr='score std', ax=ax3, **args)
+            group.plot(x='train_size', y='fit mean', yerr='fit err', ax=ax1, **args)
+            group.plot(x='train_size', y='predict mean', yerr='predict err', ax=ax2, **args)
+            group.plot(x='train_size', y='score mean', yerr='score err', ax=ax3, **args)
 
         for ax, label in [(ax1, "Training Time (s)"), (ax2, "Prediction Time (s)"), (ax3, score_label)]:
             ax.set_xlabel('Dataset Size\n(fraction of training data)', fontsize=14)
@@ -220,6 +228,9 @@ class Experiment:
                     predict_start = time()
                     y_pred = clf.predict_proba(X_test) if self.needs_proba else clf.predict(X_test)
                     predict_end = time()
+
+                    if self.needs_proba and y_pred.shape[1] == 2:
+                        y_pred = y_pred[:, 1]
 
                     scores.append({
                         'run': run + 1,
@@ -456,12 +467,14 @@ class Experiment:
                         outputs = net(inputs.to(dtype))
 
                         y_true = torch.argmax(labels, dim=1)
-                        y_pred = torch.argmax(outputs, dim=1)
-                        y_score = outputs[:, 1] if outputs.shape[1] == 2 else outputs
+                        y_pred = outputs if self.needs_proba else torch.argmax(outputs, dim=1)
+
+                        if self.needs_proba and y_pred.shape[1] == 2:
+                            y_pred = y_pred[:, 1]
 
                         scores.append({
                             'epoch': epoch + (batch_idx + 1) / n_batches,
-                            'score': self.score(y_true, y_score if self.needs_proba else y_pred),
+                            'score': self.score(y_true, y_pred),
                             'loss': self.loss(outputs, labels).item()
                         })
 
