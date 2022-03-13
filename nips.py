@@ -14,8 +14,8 @@ ex = Experiment(dataset='20ng', loss=log_loss, score=accuracy_score, needs_proba
 ex.data.summary()
 
 # Timing CPU and GPU
-ex.timing_cpu(runs=5)
 ex.timing_gpu(runs=5)
+ex.timing_cpu(runs=5)
 ex.plot_timing(score_label='Accuracy Score')
 
 # Table cross-validation times and scores
