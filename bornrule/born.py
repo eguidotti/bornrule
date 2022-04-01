@@ -155,15 +155,14 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
         return self.sparse_.csr_matrix((val, (row, col)), shape=(n, m))
 
     def unique_labels_(self, y):
-        if not self.sparse_.issparse(y) and y.ndim == 1:
-            if self.gpu_:
-                return self.dense_.unique(y)
+        if self.sparse_.issparse(y) or y.ndim == 2:
+            return self.dense_.arange(0, y.shape[1])
 
-            else:
-                return unique_labels(y)
+        elif self.gpu_:
+            return self.dense_.unique(y)
 
         else:
-            return self.dense_.arange(0, y.shape[1])
+            return unique_labels(y)
 
     def reset_(self, X, y):
         self.corpus_, self.classes_, self.weights_ = None, None, None

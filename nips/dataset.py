@@ -16,6 +16,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
 from collections import Counter
+from torchvision import datasets, transforms
 from pmlb import fetch_data
 
 try:
@@ -38,9 +39,34 @@ class Dataset:
         if hasattr(self, f"load_{dataset}"):
             getattr(self, f"load_{dataset}")()
 
+        elif hasattr(datasets, dataset):
+            self.torchvision(dataset, subset='train')
+            self.torchvision(dataset, subset='test')
+
         else:
             df = fetch_data(dataset, local_cache_dir=self.output_dir)
             self.X_train, self.y_train = self.X_y(df, 'target')
+
+        self.shape = self.X_train.shape[1:]
+        self.ndim = len(self.shape)
+
+        if self.ndim > 1:
+            self.X_train = self.flatten(self.X_train)
+            if self.X_test is not None:
+                self.X_test = self.flatten(self.X_test)
+
+    def torchvision(self, dataset, subset):
+        loader = getattr(datasets, dataset)
+        root = f"{self.output_dir}/{dataset}/{subset}"
+        data = loader(root=root, train=subset == 'train', download=True, transform=transforms.ToTensor())
+
+        X, y = [], []
+        for i in range(len(data)):
+            X.append(data[i][0].numpy())
+            y.append(data[i][1])
+
+        setattr(self, f"X_{subset}", np.array(X))
+        setattr(self, f"y_{subset}", np.array(y))
 
     def load_20ng(self):
         train = fetch_20newsgroups(subset='train')
@@ -169,6 +195,9 @@ class Dataset:
             X_train, X_test, y_train, y_test = train_test_split(
                 self.X_train, self.y_train, test_size=0.2, train_size=train_size * 0.8)
 
+        return X_train, X_test, y_train, y_test
+
+        # TODO: remove below and fix born when all column is zero
         if sparse.issparse(X_train):
             columns = np.unique(sparse.find(X_train)[1])
         else:
@@ -177,9 +206,13 @@ class Dataset:
         return X_train[:, columns], X_test[:, columns], y_train, y_test
 
     def summary(self):
-        n_train, n_features = self.X_train.shape
+        n_train = self.X_train.shape[0]
         n_test = self.X_test.shape[0] if self.X_test is not None else None
-        return {'n_train': n_train, 'n_test': n_test, 'n_features': n_features, 'classes': Counter(self.y_train)}
+        return {'n_train': n_train, 'n_test': n_test, 'shape': self.shape, 'classes': Counter(self.y_train)}
+
+    @staticmethod
+    def flatten(ndarray):
+        return ndarray.reshape(ndarray.shape[0], -1)
 
     @staticmethod
     def X_y(df, target):

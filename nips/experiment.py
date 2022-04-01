@@ -17,7 +17,7 @@ from sklearn.tree import DecisionTreeClassifier
 from bornrule import BornClassifier
 from bornrule.torch import Born
 from .dataset import Dataset
-from .networks import BCBorn, SoftMax
+from .networks import BCBorn, SoftMax, CNNBorn, CNNSoftMax
 
 
 class Experiment:
@@ -354,6 +354,18 @@ class Experiment:
                     }
                 })
 
+            if self.data.ndim == 3:
+                nets.update({
+                    'CNN+Born': {
+                        'net': CNNBorn(self.data.shape, out_features, dtype=torch.float64),
+                        'dtype': torch.float64
+                    },
+                    'CNN+SoftMax': {
+                        'net': CNNSoftMax(self.data.shape, out_features, dtype=torch.float64),
+                        'dtype': torch.float64
+                    },
+                })
+
             for name, args in nets.items():
                 print(f"--- Run: {run + 1}/{runs} ({name}) ---")
                 score = self.train_and_eval(train_batches=train_batches, test_data=test_data, epochs=epochs, **args)
@@ -460,7 +472,7 @@ class Experiment:
                     self.loss(outputs, labels).backward()
                     optimizer.step()
 
-                if eval and (batch_idx == n_batches - 1 or epoch < 1):
+                if eval and (batch_idx == n_batches - 1):
                     net.eval()
                     with torch.no_grad():
                         inputs, labels = test_data

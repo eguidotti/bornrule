@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "bornrule"
+version = "0.1.0"
+license = "GPL-3.0-or-later"
+description = "Supervised classification with Born's rule."
+authors = ["Emanuele Guidotti <emanuele.guidotti@unine.ch>"]
+readme = "README.md"
+repository = "https://github.com/eguidotti/bornrule"
+homepage = "https://github.com/eguidotti/bornrule"
+
+[tool.poetry.dependencies]
+python = ">=3.8,<3.11"
+scipy = "^1.8.0"
+scikit-learn = "^1.0.2"
+pandas = "^1.4.1"
+numpy = "^1.22.3"
+
+[tool.poetry.dev-dependencies]
+SQLAlchemy = "^1.4.32"
+torch = "^1.11.0"
+matplotlib = "^3.5.1"
+bs4 = "^0.0.1"
+nltk = "^3.7"
+pmlb = "^1.0.1"
+rdkit-pypi = "^2021.9.5"
+torchvision = "^0.12.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
