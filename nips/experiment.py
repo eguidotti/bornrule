@@ -22,12 +22,13 @@ from .networks import BCBorn, SoftMax, CNNBorn, CNNSoftMax
 
 class Experiment:
 
-    def __init__(self, dataset, loss, score, needs_proba=False, output_dir="results"):
+    def __init__(self, dataset, loss, score, needs_proba=False, data_dir="data", output_dir="results"):
         self.loss = loss
         self.score, self.needs_proba = score, needs_proba
         self.scorer = metrics.make_scorer(self.score, greater_is_better=True, needs_proba=needs_proba)
 
-        self.data = Dataset(dataset, output_dir=output_dir)
+        self.data = Dataset(dataset, output_dir=data_dir)
+
         self.output_dir = output_dir
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -309,7 +310,7 @@ class Experiment:
 
         model = BornClassifier()
         weights = model.fit(self.data.X_train, self.data.y_train).explain()
-        classes, features = model.classes_, self.data.vectorizer.get_feature_names_out()
+        classes, features = model.classes_, self.data.features_names
 
         if sparse.issparse(weights):
             df = pd.DataFrame.sparse.from_spmatrix(weights, index=features, columns=classes)
@@ -434,7 +435,7 @@ class Experiment:
         w2 = torch.clone(net.weight.data)
 
         top = torch.argsort(w2[:, c].abs(), descending=True)
-        names = self.data.vectorizer.get_feature_names_out()
+        names = self.data.features_names
 
         fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4), subplot_kw={'projection': 'polar'})
         plt.tight_layout(pad=3, rect=(0, 0, 1, 0.95))

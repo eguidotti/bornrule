@@ -9,8 +9,9 @@ from pmlb import classification_dataset_names
 # - loss: the loss used to train neural networks
 # - score: the metric to evaluate the classification results
 # - needs_proba: True if score requires probabilities rather than predicted classes
+# - data_dir: the directory where data are to be downloaded
 # - output_dir: the directory where results are to be saved
-ex = Experiment(dataset='20ng', loss=log_loss, score=accuracy_score, needs_proba=False, output_dir="results")
+ex = Experiment(dataset='20ng', loss=log_loss, score=accuracy_score, needs_proba=False)
 ex.data.summary()
 
 # Timing CPU and GPU

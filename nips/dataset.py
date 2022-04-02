@@ -31,8 +31,10 @@ class Dataset:
     def __init__(self, dataset, output_dir):
         self.dataset = dataset
         self.output_dir = output_dir
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
-        self.vectorizer = None
+        self.features_names = None
         self.X_train, self.y_train = None, None
         self.X_test, self.y_test = None, None
 
@@ -57,7 +59,7 @@ class Dataset:
 
     def torchvision(self, dataset, subset):
         loader = getattr(datasets, dataset)
-        root = f"{self.output_dir}/{dataset}/{subset}"
+        root = self.output_dir + "/" + dataset
         data = loader(root=root, train=subset == 'train', download=True, transform=transforms.ToTensor())
 
         X, y = [], []
@@ -69,14 +71,18 @@ class Dataset:
         setattr(self, f"y_{subset}", np.array(y))
 
     def load_20ng(self):
-        train = fetch_20newsgroups(subset='train')
-        test = fetch_20newsgroups(subset='test')
+        train = fetch_20newsgroups(data_home=self.output_dir + "/20ng", subset='train')
+        test = fetch_20newsgroups(data_home=self.output_dir + "/20ng", subset='test')
         
-        self.vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize, lowercase=False)
-        self.X_train = self.vectorizer.fit_transform(train.data)
-        self.X_test = self.vectorizer.transform(test.data)
+        vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize, lowercase=False)
+
+        self.X_train = vectorizer.fit_transform(train.data)
         self.y_train = np.array([train.target_names[t] for t in train.target])
+
+        self.X_test = vectorizer.transform(test.data)
         self.y_test = np.array([test.target_names[t] for t in test.target])
+
+        self.features_names = vectorizer.get_feature_names_out()
 
     def load_hiv(self):
         url = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/HIV.csv"
@@ -130,9 +136,12 @@ class Dataset:
                    'backbone', 'breathes', 'venomous', 'fins', 'legs', 'tail', 'domestic', 'catsize', 'type']
         df = pd.read_csv(url, header=None, names=columns).replace({'type': labels})
 
-        self.vectorizer = OneHotEncoder()
-        self.X_train = self.vectorizer.fit_transform(df.iloc[:, 1:-1])
+        vectorizer = OneHotEncoder()
+
+        self.X_train = vectorizer.fit_transform(df.iloc[:, 1:-1])
         self.y_train = np.asarray(df.iloc[:, -1])
+
+        self.features_names = vectorizer.get_feature_names_out()
 
     def load_r8(self):
         self.load_reuters('r8')
@@ -152,11 +161,15 @@ class Dataset:
         train = [doc for doc in train if doc[1] in labels]
         test = [doc for doc in test if doc[1] in labels]
 
-        self.vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize, lowercase=True)
-        self.X_train = self.vectorizer.fit_transform([doc[0] for doc in train])
-        self.X_test = self.vectorizer.transform([doc[0] for doc in test])
+        vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize, lowercase=True)
+
+        self.X_train = vectorizer.fit_transform([doc[0] for doc in train])
         self.y_train = np.array([doc[1] for doc in train])
+
+        self.X_test = vectorizer.transform([doc[0] for doc in test])
         self.y_test = np.array([doc[1] for doc in test])
+
+        self.features_names = vectorizer.get_feature_names_out()
 
     def download_reuters(self):
         train, test = [], []
