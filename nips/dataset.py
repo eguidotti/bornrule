@@ -62,21 +62,13 @@ class Dataset:
         loader = getattr(datasets, dataset)
         root = self.output_dir + "/" + dataset
 
-        size = {
-            "MNIST": (28, 28),
-            "FashionMNIST": (28, 28),
-            "CIFAR10": (32, 32),
-            "Flowers102": (128, 128),
-            "FGVCAircraft": (512, 512),
-        }
-
         transform = transforms.Compose([
-            #transforms.Resize(size[dataset]),
             transforms.ToTensor()
         ])
 
         try:
             data = loader(root=root, train=subset == 'train', download=True, transform=transform)
+
         except TypeError:
             data = loader(root=root, split=subset, download=True, transform=transform)
 
@@ -226,14 +218,6 @@ class Dataset:
                 self.X_train, self.y_train, test_size=0.2, train_size=train_size * 0.8)
 
         return X_train, X_test, y_train, y_test
-
-        # TODO: remove below and fix born when all column is zero
-        if sparse.issparse(X_train):
-            columns = np.unique(sparse.find(X_train)[1])
-        else:
-            columns = ~np.all(X_train == 0, axis=0)
-
-        return X_train[:, columns], X_test[:, columns], y_train, y_test
 
     def summary(self):
         n_train = self.X_train.shape[0]
