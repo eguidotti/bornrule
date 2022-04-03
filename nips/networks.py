@@ -7,7 +7,7 @@ from bornrule.torch import Born
 
 class BCBorn(torch.nn.Module):
 
-    def __init__(self, X, y, dtype):
+    def __init__(self, X, y):
         super().__init__()
         in_features, out_features = X.shape[1], len(np.unique(y))
 
@@ -17,7 +17,8 @@ class BCBorn(torch.nn.Module):
             weight = weight.todense()
 
         self.born = Born(in_features=in_features, out_features=out_features)
-        self.born.weight = torch.nn.Parameter(torch.tensor(weight, dtype=dtype))
+        weight = torch.tensor(np.array([weight, np.zeros_like(weight)]), dtype=torch.get_default_dtype())
+        self.born.weight = torch.nn.Parameter(weight)
 
     def forward(self, x):
         x = torch.sqrt(x)
@@ -27,9 +28,9 @@ class BCBorn(torch.nn.Module):
 
 class SoftMax(torch.nn.Module):
 
-    def __init__(self, in_features, out_features, dtype):
+    def __init__(self, in_features, out_features):
         super().__init__()
-        self.linear = torch.nn.Linear(in_features, out_features, dtype=dtype)
+        self.linear = torch.nn.Linear(in_features, out_features)
         self.softmax = torch.nn.Softmax(dim=1)
 
     def forward(self, x):
@@ -40,11 +41,11 @@ class SoftMax(torch.nn.Module):
 
 class CNN(torch.nn.Module):
 
-    def __init__(self, shape, dtype):
+    def __init__(self, shape):
         super().__init__()
 
         k, c = 5, 10
-        self.conv = torch.nn.Conv2d(shape[0], out_channels=c, kernel_size=(k, k), dtype=dtype)
+        self.conv = torch.nn.Conv2d(shape[0], out_channels=c, kernel_size=(k, k))
 
         p = 2
         self.pool = torch.nn.MaxPool2d(kernel_size=(p, p))
@@ -63,10 +64,10 @@ class CNN(torch.nn.Module):
 
 class CNNBorn(torch.nn.Module):
 
-    def __init__(self, shape, n_classes, dtype):
+    def __init__(self, shape, n_classes):
         super().__init__()
-        self.cnn = CNN(shape=shape, dtype=dtype)
-        self.born = Born(self.cnn.out_features, n_classes, dtype=dtype)
+        self.cnn = CNN(shape=shape)
+        self.born = Born(self.cnn.out_features, n_classes)
 
     def forward(self, x):
         x = self.cnn(x)
@@ -76,10 +77,10 @@ class CNNBorn(torch.nn.Module):
 
 class CNNSoftMax(torch.nn.Module):
 
-    def __init__(self, shape, n_classes, dtype):
+    def __init__(self, shape, n_classes):
         super().__init__()
-        self.cnn = CNN(shape=shape, dtype=dtype)
-        self.softmax = SoftMax(in_features=self.cnn.out_features, out_features=n_classes, dtype=dtype)
+        self.cnn = CNN(shape=shape)
+        self.softmax = SoftMax(in_features=self.cnn.out_features, out_features=n_classes)
 
     def forward(self, x):
         x = self.cnn(x)

@@ -332,44 +332,33 @@ class Experiment:
             train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
 
             nets = {
-                'Born': {
-                    'net': Born(in_features, out_features, dtype=torch.float64),
-                    'dtype': torch.complex128
-                },
-                'SoftMax': {
-                    'net': SoftMax(in_features, out_features, dtype=torch.float64),
-                    'dtype': torch.float64
-                },
+                'Born': Born(in_features, out_features),
+                'SoftMax': SoftMax(in_features, out_features),
             }
 
             if sparse.issparse(X_train) or (X_train >= 0).all():
                 nets.update({
-                    'BC': {
-                        'net': BCBorn(X_train, y_train, dtype=torch.float64),
-                        'dtype': torch.float64,
-                        'train': False
-                    },
-                    'BC+Born': {
-                        'net': BCBorn(X_train, y_train, dtype=torch.float64),
-                        'dtype': torch.float64
-                    }
+                    'BC': BCBorn(X_train, y_train),
+                    'BC+Born': BCBorn(X_train, y_train),
                 })
 
             if self.data.ndim == 3:
                 nets.update({
-                    'CNN+Born': {
-                        'net': CNNBorn(self.data.shape, out_features, dtype=torch.float64),
-                        'dtype': torch.float64
-                    },
-                    'CNN+SoftMax': {
-                        'net': CNNSoftMax(self.data.shape, out_features, dtype=torch.float64),
-                        'dtype': torch.float64
-                    },
+                    'CNN+Born': CNNBorn(self.data.shape, out_features),
+                    'CNN+SoftMax': CNNSoftMax(self.data.shape, out_features),
                 })
 
-            for name, args in nets.items():
+            for name, net in nets.items():
                 print(f"--- Run: {run + 1}/{runs} ({name}) ---")
-                score = self.train_and_eval(train_batches=train_batches, test_data=test_data, epochs=epochs, **args)
+
+                score = self.train_and_eval(
+                    net=net,
+                    train_batches=train_batches,
+                    test_data=test_data,
+                    epochs=epochs,
+                    train=name != 'BC'
+                )
+
                 for s in score:
                     s.update({"model": name, 'run': run})
                     scores.append(s)
@@ -419,20 +408,24 @@ class Experiment:
         X_train, X_test, y_train, y_test = self.data.split(random_state=random_state)
         train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
 
-        net = Born(X_train.shape[1], len(np.unique(y_train)), dtype=torch.float32)
         args = {
             'epochs': 1,
             'train_batches': train_batches,
             'test_data': test_data,
-            'dtype': torch.complex64,
             'eval': False
         }
 
+        net = Born(X_train.shape[1], len(np.unique(y_train)))
         w0 = torch.clone(net.weight.data)
+        w0 = torch.complex(real=w0[0], imag=w0[1])
+
         self.train_and_eval(net=net, **args)
         w1 = torch.clone(net.weight.data)
+        w1 = torch.complex(real=w1[0], imag=w1[1])
+
         self.train_and_eval(net=net, **args)
         w2 = torch.clone(net.weight.data)
+        w2 = torch.complex(real=w2[0], imag=w2[1])
 
         top = torch.argsort(w2[:, c].abs(), descending=True)
         names = self.data.features_names
@@ -457,7 +450,7 @@ class Experiment:
         fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
         print(f"Image saved in {file}")
 
-    def train_and_eval(self, net, train_batches, test_data, epochs, dtype, train=True, eval=True):
+    def train_and_eval(self, net, train_batches, test_data, epochs, train=True, eval=True):
         scores = []
         n_batches = len(train_batches)
         optimizer = torch.optim.Adam(net.parameters())
@@ -469,7 +462,7 @@ class Experiment:
                 if train:
                     net.train()
                     optimizer.zero_grad()
-                    outputs = net(inputs.to(dtype))
+                    outputs = net(inputs)
                     self.loss(outputs, labels).backward()
                     optimizer.step()
 
@@ -477,7 +470,7 @@ class Experiment:
                     net.eval()
                     with torch.no_grad():
                         inputs, labels = test_data
-                        outputs = net(inputs.to(dtype))
+                        outputs = net(inputs)
 
                         y_true = torch.argmax(labels, dim=1)
                         y_pred = outputs if self.needs_proba else torch.argmax(outputs, dim=1)
@@ -512,6 +505,6 @@ class Experiment:
         if sparse.issparse(x):
             x = x.tocoo()
             i = torch.LongTensor(np.vstack((x.row, x.col)))
-            v = torch.tensor(x.data)
+            v = torch.tensor(x.data, dtype=torch.get_default_dtype())
             return torch.sparse_coo_tensor(i, v, torch.Size(x.shape))
-        return torch.tensor(x)
+        return torch.tensor(x, dtype=torch.get_default_dtype())

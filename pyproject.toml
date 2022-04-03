@@ -24,6 +24,7 @@ nltk = "^3.7"
 pmlb = "^1.0.1"
 rdkit-pypi = "^2021.9.5"
 torchvision = "^0.12.0"
+tqdm = "^4.63.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

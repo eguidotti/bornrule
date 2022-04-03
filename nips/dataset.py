@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 import pandas as pd
 from glob import glob
+from tqdm import tqdm
 from scipy import sparse
 from bs4 import BeautifulSoup
 from urllib.request import urlretrieve
@@ -42,8 +43,8 @@ class Dataset:
             getattr(self, f"load_{dataset}")()
 
         elif hasattr(datasets, dataset):
-            self.torchvision(dataset, subset='train')
-            self.torchvision(dataset, subset='test')
+            self.X_train, self.y_train = self.torchvision(dataset, subset='train')
+            self.X_test, self.y_test = self.torchvision(dataset, subset='test')
 
         else:
             df = fetch_data(dataset, local_cache_dir=self.output_dir)
@@ -60,15 +61,31 @@ class Dataset:
     def torchvision(self, dataset, subset):
         loader = getattr(datasets, dataset)
         root = self.output_dir + "/" + dataset
-        data = loader(root=root, train=subset == 'train', download=True, transform=transforms.ToTensor())
+
+        size = {
+            "MNIST": (28, 28),
+            "FashionMNIST": (28, 28),
+            "CIFAR10": (32, 32),
+            "Flowers102": (128, 128),
+            "FGVCAircraft": (512, 512),
+        }
+
+        transform = transforms.Compose([
+            #transforms.Resize(size[dataset]),
+            transforms.ToTensor()
+        ])
+
+        try:
+            data = loader(root=root, train=subset == 'train', download=True, transform=transform)
+        except TypeError:
+            data = loader(root=root, split=subset, download=True, transform=transform)
 
         X, y = [], []
-        for i in range(len(data)):
+        for i in tqdm(range(len(data))):
             X.append(data[i][0].numpy())
             y.append(data[i][1])
 
-        setattr(self, f"X_{subset}", np.array(X))
-        setattr(self, f"y_{subset}", np.array(y))
+        return np.array(X), np.array(y)
 
     def load_20ng(self):
         train = fetch_20newsgroups(data_home=self.output_dir + "/20ng", subset='train')
