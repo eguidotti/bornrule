@@ -1,3 +1,5 @@
+import math
+
 try:
     import torch
 
@@ -12,8 +14,8 @@ class Born(torch.nn.Module):
     def __init__(self, in_features, out_features, device=None, dtype=None):
         super(Born, self).__init__()
 
-        rho = 1. / (in_features ** 0.5)
-        theta = 2. * torch.pi * torch.rand(in_features, out_features)
+        rho = 1. / math.sqrt(in_features)
+        theta = 2. * math.pi * torch.rand(in_features, out_features)
 
         real = rho * torch.cos(theta)
         imag = rho * torch.sin(theta)
@@ -21,13 +23,9 @@ class Born(torch.nn.Module):
         if dtype is None:
             dtype = torch.get_default_dtype()
 
-        if self.is_complex(dtype):
-            weight = torch.complex(real, imag)
-
-        else:
-            weight = torch.stack((real, imag))
-
-        self.weight = torch.nn.Parameter(weight.to(device=device, dtype=dtype))
+        weight = torch.complex(real, imag) if self.is_complex(dtype) else torch.stack((real, imag))
+        weight = weight.to(device=device, dtype=dtype)
+        self.weight = torch.nn.Parameter(weight)
         
     def forward(self, x):
 
