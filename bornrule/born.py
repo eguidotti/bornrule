@@ -65,17 +65,30 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
     def get_weights_(self):
         if self.weights_ is None:
             C_ji = self.corpus_
+
             if self.b != 0:
+                # sum per class
                 C_i = self.sum_(self.corpus_, axis=0)
-                C_ji = self.multiply_(C_ji, self.power_(C_i, -self.b))
+                # invert non-zero elements
+                self.power_(C_i, -self.b, out=C_i, where=C_i != 0)
+                # normalize over the classes
+                C_ji = self.multiply_(C_ji, C_i)
+
             if self.b != 1:
+                # sum per feature
                 C_j = self.sum_(self.corpus_, axis=1)
-                C_ji = self.multiply_(C_ji, self.power_(C_j, self.b - 1))
+                # invert non-zero elements
+                self.power_(C_j, self.b - 1, out=C_j, where=C_j != 0)
+                # normalize over the features
+                C_ji = self.multiply_(C_ji, C_j)
 
             W_ji = self.power_(C_ji, self.a)
             if self.h != 0:
-                P_ji = self.multiply_(C_ji, 1. / self.sum_(C_ji, axis=1))
+                # probability of class i given feature j
+                P_ji = self.normalize_(C_ji, axis=1)
+                # compute entropy per feature
                 H_j = 1 + self.sum_(self.multiply_(P_ji, self.log_(P_ji)), axis=1) / self.dense_.log(P_ji.shape[1])
+                # regularize the weights
                 W_ji = self.multiply_(W_ji, self.power_(H_j, self.h))
 
             self.weights_ = W_ji
@@ -94,11 +107,11 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
         return self.dense_.multiply(x, y)
 
-    def power_(self, x, p):
+    def power_(self, x, p, **kwargs):
         if self.sparse_.issparse(x):
             return x.power(p)
 
-        return self.dense_.power(x, p)
+        return self.dense_.power(x, p, **kwargs)
 
     def log_(self, x):
         x = x.copy()
@@ -111,6 +124,11 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             x[nz] = self.dense_.log(x[nz])
 
         return x
+
+    def normalize_(self, x, axis):
+        n = self.sum_(x, axis=axis)
+        self.power_(n, -1, out=n, where=n != 0)
+        return self.multiply_(x, n)
 
     def sanitize_(self, X, y=None):
         if self.gpu_:
