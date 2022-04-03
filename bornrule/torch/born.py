@@ -27,7 +27,7 @@ class Born(torch.nn.Module):
         else:
             weight = torch.stack((real, imag))
 
-        self.weight = torch.nn.Parameter(weight.to(dtype).to(device))
+        self.weight = torch.nn.Parameter(weight.to(device=device, dtype=dtype))
         
     def forward(self, x):
 
