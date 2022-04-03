@@ -1,15 +1,15 @@
+import numpy as np
+import pandas as pd
+from collections import defaultdict
+from .sqlite import SQLite
+from .postgresql import PostgreSQL
+
 try:
     from sqlalchemy import create_engine, String, Integer
 except ModuleNotFoundError:
     raise ModuleNotFoundError(
         "SQLAlchemy required but not installed. "
         "Please install SQLAlchemy with: pip install sqlalchemy")
-
-import numpy as np
-import pandas as pd
-from collections import defaultdict
-from .sqlite import SQLite
-from .postgresql import PostgreSQL
 
 
 class BornClassifierSQL:
