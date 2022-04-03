@@ -71,7 +71,7 @@ class CNNBorn(torch.nn.Module):
 
     def forward(self, x):
         x = self.cnn(x)
-        x = self.born(x + 0j)
+        x = self.born(x)
         return x
 
 
