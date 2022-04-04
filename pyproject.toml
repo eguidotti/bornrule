@@ -11,9 +11,9 @@ homepage = "https://github.com/eguidotti/bornrule"
 [tool.poetry.dependencies]
 python = ">=3.8,<3.11"
 scipy = "^1.8.0"
-scikit-learn = "^1.0.0"
-pandas = "^1.0.0"
-numpy = "^1.0.0"
+scikit-learn = "*"
+pandas = "*"
+numpy = "*"
 
 [tool.poetry.dev-dependencies]
 SQLAlchemy = "^1.4.32"
