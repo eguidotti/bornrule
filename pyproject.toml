@@ -9,8 +9,8 @@ repository = "https://github.com/eguidotti/bornrule"
 homepage = "https://github.com/eguidotti/bornrule"
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.11"
-scipy = "^1.8.0"
+python = "^3.7"
+scipy = "^1.0"
 scikit-learn = "*"
 pandas = "*"
 numpy = "*"
