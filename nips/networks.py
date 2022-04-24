@@ -7,36 +7,32 @@ from bornrule.torch import Born
 
 class BCBorn(torch.nn.Module):
 
-    def __init__(self, X, y):
+    def __init__(self, in_features, out_features, Xy=None, dtype=None):
         super().__init__()
-        in_features, out_features = X.shape[1], len(np.unique(y))
+        self.born = Born(in_features=in_features, out_features=out_features, dtype=dtype)
 
-        weight = BornClassifier().fit(X, y).explain()
-        weight = weight / np.mean(weight) / np.sqrt(in_features)
-        if sparse.issparse(weight):
-            weight = weight.todense()
+        if Xy is not None:
+            weight = BornClassifier().fit(Xy[0], Xy[1]).explain()
+            weight = weight / np.mean(weight) / np.sqrt(in_features)
+            if sparse.issparse(weight):
+                weight = weight.todense()
 
-        self.born = Born(in_features=in_features, out_features=out_features)
-        weight = torch.tensor(np.array([weight, np.zeros_like(weight)]), dtype=torch.get_default_dtype())
-        self.born.weight = torch.nn.Parameter(weight)
+            weight = torch.tensor(np.array([weight, np.zeros_like(weight)]), dtype=dtype)
+            self.born.weight = torch.nn.Parameter(weight)
 
     def forward(self, x):
-        x = torch.sqrt(x)
-        x = self.born(x)
-        return x
+        return self.born(torch.sqrt(x))
 
 
 class SoftMax(torch.nn.Module):
 
-    def __init__(self, in_features, out_features):
+    def __init__(self, in_features, out_features, dtype=None):
         super().__init__()
-        self.linear = torch.nn.Linear(in_features, out_features)
+        self.linear = torch.nn.Linear(in_features, out_features, dtype=dtype)
         self.softmax = torch.nn.Softmax(dim=1)
 
     def forward(self, x):
-        x = self.linear(x)
-        x = self.softmax(x)
-        return x
+        return self.softmax(self.linear(x))
 
 
 class CNN(torch.nn.Module):

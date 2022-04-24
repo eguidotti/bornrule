@@ -28,6 +28,7 @@ class Experiment:
         self.scorer = metrics.make_scorer(self.score, greater_is_better=True, needs_proba=needs_proba)
 
         self.data = Dataset(dataset, output_dir=data_dir)
+        self.dtype = torch.float64
 
         self.output_dir = output_dir
         if not os.path.exists(output_dir):
@@ -332,20 +333,21 @@ class Experiment:
             train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
 
             nets = {
-                'Born': Born(in_features, out_features),
-                'SoftMax': SoftMax(in_features, out_features),
+                'Born': Born(in_features, out_features, dtype=self.dtype),
+                'SoftMax': SoftMax(in_features, out_features, dtype=self.dtype),
             }
 
             if sparse.issparse(X_train) or (X_train >= 0).all():
                 nets.update({
-                    'BC': BCBorn(X_train, y_train),
-                    'BC+Born': BCBorn(X_train, y_train),
+                    'BC': BCBorn(in_features, out_features, (X_train, y_train), dtype=self.dtype),
+                    'BC+Born': BCBorn(in_features, out_features, (X_train, y_train), dtype=self.dtype),
+                    'Born2': BCBorn(in_features, out_features, dtype=self.dtype),
                 })
 
             if self.data.ndim == 3:
                 nets.update({
-                    'CNN+Born': CNNBorn(self.data.shape, out_features),
-                    'CNN+SoftMax': CNNSoftMax(self.data.shape, out_features),
+                    'CNN+Born': CNNBorn(self.data.shape, out_features, dtype=self.dtype),
+                    'CNN+SoftMax': CNNSoftMax(self.data.shape, out_features, dtype=self.dtype),
                 })
 
             for name, net in nets.items():
@@ -455,7 +457,7 @@ class Experiment:
         n_batches = len(train_batches)
         optimizer = torch.optim.Adam(net.parameters())
         for epoch in range(epochs):
-            print(f"doing epoch {epoch + 1}/{epochs}...")
+            print(f"doing epoch {epoch + 1}/{epochs}...", end=" " if eval else "\n")
             shuffle = [train_batches[i] for i in torch.randperm(len(train_batches))]
             for batch_idx, (inputs, labels) in enumerate(shuffle):
 
@@ -484,6 +486,8 @@ class Experiment:
                             'loss': self.loss(outputs, labels).item()
                         })
 
+                        print("test score:", scores[-1]['score'], "test loss:", scores[-1]['loss'])
+
         print("done!")
         return scores
 
@@ -500,11 +504,10 @@ class Experiment:
         for batch_idxs in np.array_split(idxs, batch_size):
             yield self.to_tensor(X[batch_idxs]), self.to_tensor(y[batch_idxs])
 
-    @staticmethod
-    def to_tensor(x):
+    def to_tensor(self, x):
         if sparse.issparse(x):
             x = x.tocoo()
             i = torch.LongTensor(np.vstack((x.row, x.col)))
-            v = torch.tensor(x.data, dtype=torch.get_default_dtype())
+            v = torch.tensor(x.data, dtype=self.dtype)
             return torch.sparse_coo_tensor(i, v, torch.Size(x.shape))
-        return torch.tensor(x, dtype=torch.get_default_dtype())
+        return torch.tensor(x, dtype=self.dtype)
