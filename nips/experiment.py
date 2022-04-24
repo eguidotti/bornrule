@@ -1,5 +1,4 @@
 import os
-import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -14,10 +13,15 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
+
 from bornrule import BornClassifier
 from bornrule.torch import Born
+
 from .dataset import Dataset
 from .networks import BCBorn, SoftMax, CNNBorn, CNNSoftMax
+
+import torch
+torch.set_default_dtype(torch.float64)
 
 
 class Experiment:
@@ -28,7 +32,6 @@ class Experiment:
         self.scorer = metrics.make_scorer(self.score, greater_is_better=True, needs_proba=needs_proba)
 
         self.data = Dataset(dataset, output_dir=data_dir)
-        self.dtype = torch.float64
 
         self.output_dir = output_dir
         if not os.path.exists(output_dir):
@@ -333,21 +336,21 @@ class Experiment:
             train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
 
             nets = {
-                'Born': Born(in_features, out_features, dtype=self.dtype),
-                'SoftMax': SoftMax(in_features, out_features, dtype=self.dtype),
+                'Born': Born(in_features, out_features),
+                'SoftMax': SoftMax(in_features, out_features),
             }
 
             if sparse.issparse(X_train) or (X_train >= 0).all():
                 nets.update({
-                    'BC': BCBorn(in_features, out_features, (X_train, y_train), dtype=self.dtype),
-                    'BC+Born': BCBorn(in_features, out_features, (X_train, y_train), dtype=self.dtype),
-                    'Born2': BCBorn(in_features, out_features, dtype=self.dtype),
+                    'BC': BCBorn(in_features, out_features, (X_train, y_train)),
+                    'BC+Born': BCBorn(in_features, out_features, (X_train, y_train)),
+                    'Born2': BCBorn(in_features, out_features),
                 })
 
             if self.data.ndim == 3:
                 nets.update({
-                    'CNN+Born': CNNBorn(self.data.shape, out_features, dtype=self.dtype),
-                    'CNN+SoftMax': CNNSoftMax(self.data.shape, out_features, dtype=self.dtype),
+                    'CNN+Born': CNNBorn(self.data.shape, out_features),
+                    'CNN+SoftMax': CNNSoftMax(self.data.shape, out_features),
                 })
 
             for name, net in nets.items():
@@ -504,10 +507,11 @@ class Experiment:
         for batch_idxs in np.array_split(idxs, batch_size):
             yield self.to_tensor(X[batch_idxs]), self.to_tensor(y[batch_idxs])
 
-    def to_tensor(self, x):
+    @staticmethod
+    def to_tensor(x):
         if sparse.issparse(x):
             x = x.tocoo()
             i = torch.LongTensor(np.vstack((x.row, x.col)))
-            v = torch.tensor(x.data, dtype=self.dtype)
+            v = torch.tensor(x.data, dtype=torch.get_default_dtype())
             return torch.sparse_coo_tensor(i, v, torch.Size(x.shape))
-        return torch.tensor(x, dtype=self.dtype)
+        return torch.tensor(x, dtype=torch.get_default_dtype())
