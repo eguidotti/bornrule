@@ -70,7 +70,7 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
                 # sum per class
                 C_i = self.sum_(self.corpus_, axis=0)
                 # invert non-zero elements
-                self.power_(C_i, -self.b, out=C_i, where=C_i != 0)
+                C_i = self.power_(C_i, -self.b)
                 # normalize over the classes
                 C_ji = self.multiply_(C_ji, C_i)
 
@@ -78,7 +78,7 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
                 # sum per feature
                 C_j = self.sum_(self.corpus_, axis=1)
                 # invert non-zero elements
-                self.power_(C_j, self.b - 1, out=C_j, where=C_j != 0)
+                C_j = self.power_(C_j, self.b - 1)
                 # normalize over the features
                 C_ji = self.multiply_(C_ji, C_j)
 
@@ -107,11 +107,21 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
         return self.dense_.multiply(x, y)
 
-    def power_(self, x, p, **kwargs):
+    def power_(self, x, p):
         if self.sparse_.issparse(x):
             return x.power(p)
 
-        return self.dense_.power(x, p, **kwargs)
+        if self.gpu_:
+            if p > 0:
+                return self.dense_.power(x, p)
+
+            else:
+                x = x.copy()
+                nz = self.dense_.nonzero(x)
+                x[nz] = self.dense_.power(x[nz], p)
+                return x
+
+        return self.dense_.power(x, p, where=True if p > 0 else x != 0)
 
     def log_(self, x):
         x = x.copy()
@@ -127,7 +137,8 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
     def normalize_(self, x, axis):
         n = self.sum_(x, axis=axis)
-        self.power_(n, -1, out=n, where=n != 0)
+        n = self.power_(n, -1)
+
         return self.multiply_(x, n)
 
     def sanitize_(self, X, y=None):
