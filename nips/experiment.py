@@ -1,4 +1,5 @@
 import os
+import torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,15 +14,9 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
-
 from bornrule import BornClassifier
-from bornrule.torch import Born
-
 from .dataset import Dataset
-from .networks import BCBorn, SoftMax, CNNBorn, CNNSoftMax
-
-import torch
-torch.set_default_dtype(torch.float64)
+from .networks import Quantum
 
 
 class Experiment:
@@ -51,7 +46,7 @@ class Experiment:
                 'gamma': ['scale', 'auto']
             }),
             'MNB': (MultinomialNB(), {
-                'alpha': [0, 0.1, 0.2, 0.5, 1, 2, 5, 10],
+                'alpha': [0, 0.001, 0.01, 0.1, 0.5, 1, 5, 10, 50, 100],
                 'fit_prior': [True, False]
             }),
             'DT': (DecisionTreeClassifier(), {
@@ -253,9 +248,9 @@ class Experiment:
     def ablation_study(self, runs=1):
         model = BornClassifier()
         parameters = {
-            'a': [0.01, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
-            'b': [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
-            'h': [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+            'a': [0.01, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0],
+            'b': [0.00, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0],
+            'h': [0.00, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0]
         }
 
         scores = []
@@ -303,11 +298,20 @@ class Experiment:
         fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
         print(f"Image saved in {file}")
 
-        cv = df.iloc[df['score_validation'].idxmax()]
-        print(f"Best cross validation score is {cv['score_validation']}, and the test score is {cv['score_test']}")
+        s = df.iloc[df['score_validation'].idxmax()]
+        print(f"Model: best cross validation. Accuracy on test set: {s['score_test']}")
 
-        bc = df.loc[(df['a'] == 0.5) & (df['b'] == 1) & (df['h'] == 1)].iloc[0]
-        print(f"Born's cross validation score is {bc['score_validation']}, and the test score is {bc['score_test']}")
+        s = df.loc[(df['a'] == 0.5) & (df['b'] == 1) & (df['h'] == 1)].iloc[0]
+        print(f"Model: Born Classifier. Accuracy on test set: {s['score_test']}")
+
+        s = df.loc[(df['a'] == 0.5) & (df['b'] == 1) & (df['h'] == 0)].iloc[0]
+        print(f"Model: Born Classifier without entropy. Accuracy on test set: {s['score_test']}")
+
+        s = df.loc[(df['a'] == 1) & (df['b'] == 0) & (df['h'] == 0)].iloc[0]
+        print(f"Model: Bayes Classifier. Accuracy on test set: {s['score_test']}")
+
+        s = df.loc[(df['a'] == 1) & (df['b'] == 0) & (df['h'] == 1)].iloc[0]
+        print(f"Model: Bayes Classifier with entropy. Accuracy on test set: {s['score_test']}")
 
     def table_explanation(self, top=10):
         file = self.output_dir + "/" + self.data.dataset + "_explanation.csv"
@@ -336,22 +340,10 @@ class Experiment:
             train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
 
             nets = {
-                'Born': Born(in_features, out_features),
-                'SoftMax': SoftMax(in_features, out_features),
+                'BC': Quantum(in_features, out_features, (X_train, y_train)),
+                'BC+BL': Quantum(in_features, out_features, (X_train, y_train)),
+                'BL': Quantum(in_features, out_features),
             }
-
-            if sparse.issparse(X_train) or (X_train >= 0).all():
-                nets.update({
-                    'BC': BCBorn(in_features, out_features, (X_train, y_train)),
-                    'BC+Born': BCBorn(in_features, out_features, (X_train, y_train)),
-                    'Born2': BCBorn(in_features, out_features),
-                })
-
-            if self.data.ndim == 3:
-                nets.update({
-                    'CNN+Born': CNNBorn(self.data.shape, out_features),
-                    'CNN+SoftMax': CNNSoftMax(self.data.shape, out_features),
-                })
 
             for name, net in nets.items():
                 print(f"--- Run: {run + 1}/{runs} ({name}) ---")
@@ -420,16 +412,16 @@ class Experiment:
             'eval': False
         }
 
-        net = Born(X_train.shape[1], len(np.unique(y_train)))
-        w0 = torch.clone(net.weight.data)
+        net = Quantum(X_train.shape[1], len(np.unique(y_train)))
+        w0 = torch.clone(net.born.weight.data)
         w0 = torch.complex(real=w0[0], imag=w0[1])
 
         self.train_and_eval(net=net, **args)
-        w1 = torch.clone(net.weight.data)
+        w1 = torch.clone(net.born.weight.data)
         w1 = torch.complex(real=w1[0], imag=w1[1])
 
         self.train_and_eval(net=net, **args)
-        w2 = torch.clone(net.weight.data)
+        w2 = torch.clone(net.born.weight.data)
         w2 = torch.complex(real=w2[0], imag=w2[1])
 
         top = torch.argsort(w2[:, c].abs(), descending=True)
@@ -457,6 +449,7 @@ class Experiment:
 
     def train_and_eval(self, net, train_batches, test_data, epochs, train=True, eval=True):
         scores = []
+        time_train = 0
         n_batches = len(train_batches)
         optimizer = torch.optim.Adam(net.parameters())
         for epoch in range(epochs):
@@ -466,10 +459,15 @@ class Experiment:
 
                 if train:
                     net.train()
+                    tic = time()
+
                     optimizer.zero_grad()
                     outputs = net(inputs)
                     self.loss(outputs, labels).backward()
                     optimizer.step()
+
+                    toc = time()
+                    time_train += toc - tic
 
                 if eval and (batch_idx == n_batches - 1):
                     net.eval()
@@ -486,12 +484,12 @@ class Experiment:
                         scores.append({
                             'epoch': epoch + (batch_idx + 1) / n_batches,
                             'score': self.score(y_true, y_pred),
-                            'loss': self.loss(outputs, labels).item()
+                            'loss': self.loss(outputs, labels).item(),
+                            'time_train': time_train,
                         })
 
                         print("test score:", scores[-1]['score'], "test loss:", scores[-1]['loss'])
 
-        print("done!")
         return scores
 
     def to_torch(self, X_train, X_test, y_train, y_test, batch_size):

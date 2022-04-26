@@ -2,35 +2,22 @@ import os
 import re
 import nltk
 import tarfile
-import zipfile
-import warnings
 import numpy as np
-import pandas as pd
 from glob import glob
-from tqdm import tqdm
-from scipy import sparse
 from bs4 import BeautifulSoup
 from urllib.request import urlretrieve
 from sklearn.utils import shuffle
 from sklearn.datasets import fetch_20newsgroups
-from sklearn.preprocessing import OneHotEncoder
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
 from collections import Counter
-from torchvision import datasets, transforms
-from pmlb import fetch_data
-
-try:
-    from rdkit.Chem import MolFromSmiles
-    from rdkit.Chem.rdMolDescriptors import GetMorganFingerprintAsBitVect
-except ModuleNotFoundError:
-    warnings.warn("rdkit not installed: some (chemical) dataset may not work.")
 
 
 class Dataset:
 
     def __init__(self, dataset, output_dir):
         self.dataset = dataset
+
         self.output_dir = output_dir
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -39,45 +26,7 @@ class Dataset:
         self.X_train, self.y_train = None, None
         self.X_test, self.y_test = None, None
 
-        if hasattr(self, f"load_{dataset}"):
-            getattr(self, f"load_{dataset}")()
-
-        elif hasattr(datasets, dataset):
-            self.X_train, self.y_train = self.torchvision(dataset, subset='train')
-            self.X_test, self.y_test = self.torchvision(dataset, subset='test')
-
-        else:
-            df = fetch_data(dataset, local_cache_dir=self.output_dir)
-            self.X_train, self.y_train = self.X_y(df, 'target')
-
-        self.shape = self.X_train.shape[1:]
-        self.ndim = len(self.shape)
-
-        if self.ndim > 1:
-            self.X_train = self.flatten(self.X_train)
-            if self.X_test is not None:
-                self.X_test = self.flatten(self.X_test)
-
-    def torchvision(self, dataset, subset):
-        loader = getattr(datasets, dataset)
-        root = self.output_dir + "/" + dataset
-
-        transform = transforms.Compose([
-            transforms.ToTensor()
-        ])
-
-        try:
-            data = loader(root=root, train=subset == 'train', download=True, transform=transform)
-
-        except TypeError:
-            data = loader(root=root, split=subset, download=True, transform=transform)
-
-        X, y = [], []
-        for i in tqdm(range(len(data))):
-            X.append(data[i][0].numpy())
-            y.append(data[i][1])
-
-        return np.array(X), np.array(y)
+        getattr(self, f"load_{dataset}")()
 
     def load_20ng(self):
         train = fetch_20newsgroups(data_home=self.output_dir + "/20ng", subset='train')
@@ -90,65 +39,6 @@ class Dataset:
 
         self.X_test = vectorizer.transform(test.data)
         self.y_test = np.array([test.target_names[t] for t in test.target])
-
-        self.features_names = vectorizer.get_feature_names_out()
-
-    def load_hiv(self):
-        url = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/HIV.csv"
-        data_path = self.output_dir + "/hiv"
-
-        if not os.path.exists(data_path):
-            print("Downloading dataset (once and for all) into %s" % data_path)
-            os.mkdir(data_path)
-            urlretrieve(url, filename=data_path + "/hiv.csv")
-            print("done.")
-
-        df = pd.read_csv(data_path + "/hiv.csv")
-        self.X_train, self.y_train = self.smiles_to_ecfp(df['smiles']), np.asarray(df['HIV_active'])
-
-    def load_bace(self):
-        url = "https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/bace.csv"
-        data_path = self.output_dir + "/bace"
-
-        if not os.path.exists(data_path):
-            print("Downloading dataset (once and for all) into %s" % data_path)
-            os.mkdir(data_path)
-            urlretrieve(url, filename=data_path + "/bace.csv")
-            print("done.")
-
-        df = pd.read_csv(data_path + "/bace.csv")
-        self.X_train, self.y_train = self.smiles_to_ecfp(df['mol']), np.asarray(df['Class'])
-
-    def load_htru2(self):
-        url = "https://archive.ics.uci.edu/ml/machine-learning-databases/00372/HTRU2.zip"
-        archive = "HTRU2.zip"
-        data_path = self.output_dir + "/htru2"
-
-        if not os.path.exists(data_path):
-            print("Downloading dataset (once and for all) into %s" % data_path)
-            os.mkdir(data_path)
-            archive_path = os.path.join(data_path, archive)
-            urlretrieve(url, filename=archive_path)
-            print("unzipping HTRU2 dataset...")
-            with zipfile.ZipFile(archive_path, 'r') as zip_ref:
-                zip_ref.extractall(data_path)
-            print("done.")
-
-        df = pd.read_csv(self.output_dir + "/htru2/HTRU_2.csv", header=None)
-        self.X_train = np.asarray(df.iloc[:, 0:-1])
-        self.y_train = np.asarray(df.iloc[:, -1])
-
-    def load_zoo(self):
-        url = "https://archive.ics.uci.edu/ml/machine-learning-databases/zoo/zoo.data"
-        labels = {1: 'Mammal', 2: 'Bird', 3: 'Reptile', 4: 'Fish', 5: 'Amphibian', 6: 'Bug', 7: 'Invertebrate'}
-        columns = ['animal name', 'hair', 'feathers', 'eggs', 'milk', 'airborne', 'aquatic', 'predator', 'toothed',
-                   'backbone', 'breathes', 'venomous', 'fins', 'legs', 'tail', 'domestic', 'catsize', 'type']
-        df = pd.read_csv(url, header=None, names=columns).replace({'type': labels})
-
-        vectorizer = OneHotEncoder()
-
-        self.X_train = vectorizer.fit_transform(df.iloc[:, 1:-1])
-        self.y_train = np.asarray(df.iloc[:, -1])
 
         self.features_names = vectorizer.get_feature_names_out()
 
@@ -222,25 +112,4 @@ class Dataset:
     def summary(self):
         n_train = self.X_train.shape[0]
         n_test = self.X_test.shape[0] if self.X_test is not None else None
-        return {'n_train': n_train, 'n_test': n_test, 'shape': self.shape, 'classes': Counter(self.y_train)}
-
-    @staticmethod
-    def flatten(ndarray):
-        return ndarray.reshape(ndarray.shape[0], -1)
-
-    @staticmethod
-    def X_y(df, target):
-        categorical = []
-        for i, dtype in df.dtypes.iteritems():
-            if i == target:
-                continue
-            elif pd.api.types.is_integer_dtype(dtype):
-                categorical.append(i)
-            else:
-                warnings.warn(f"Skipping feature '{i}'")
-
-        return OneHotEncoder().fit_transform(df[categorical]), np.array(df[target])
-
-    @staticmethod
-    def smiles_to_ecfp(smiles):
-        return sparse.csr_matrix(np.array([GetMorganFingerprintAsBitVect(MolFromSmiles(s), radius=2) for s in smiles]))
+        return {'n_train': n_train, 'n_test': n_test, 'shape': self.X_train.shape, 'classes': Counter(self.y_train)}
