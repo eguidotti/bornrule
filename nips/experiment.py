@@ -414,15 +414,15 @@ class Experiment:
 
         net = Quantum(X_train.shape[1], len(np.unique(y_train)), device=self.device)
         w0 = torch.clone(net.born.weight.data)
-        w0 = torch.complex(real=w0[0], imag=w0[1])
+        w0 = torch.complex(real=w0[0], imag=w0[1]).cpu()
 
         self.train_and_eval(net=net, **args)
         w1 = torch.clone(net.born.weight.data)
-        w1 = torch.complex(real=w1[0], imag=w1[1])
+        w1 = torch.complex(real=w1[0], imag=w1[1]).cpu()
 
         self.train_and_eval(net=net, **args)
         w2 = torch.clone(net.born.weight.data)
-        w2 = torch.complex(real=w2[0], imag=w2[1])
+        w2 = torch.complex(real=w2[0], imag=w2[1]).cpu()
 
         top = torch.argsort(w2[:, c].abs(), descending=True)
         names = self.data.features_names
