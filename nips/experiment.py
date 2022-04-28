@@ -181,7 +181,7 @@ class Experiment:
         plt.tight_layout(pad=3, rect=(0, 0, 1, 0.95))
 
         for key, group in df.groupby('model'):
-            args = {'label': key, 'legend': False, 'marker': ".", 'capsize': 2, 'elinewidth': 1}
+            args = {'label': key, 'legend': False, 'marker': ".", 'capsize': 2, 'linewidth': 1, 'elinewidth': 0.5}
             if key.startswith("BC"):
                 args['color'] = 'black'
             if key == "BC (GPU)":
@@ -196,7 +196,7 @@ class Experiment:
             ax.set_ylabel(label, fontsize=14)
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
-            plt.setp(ax.spines.values(), linewidth=1.5)
+            plt.setp(ax.spines.values(), linewidth=0.5)
             for tick in ax.get_xticklabels() + ax.get_yticklabels():
                 tick.set_fontweight("bold")
 

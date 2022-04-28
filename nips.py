@@ -32,12 +32,12 @@ r52 = Experiment(dataset='r52', **kwargs)
 r52.data.summary()
 
 # Timing GPU
-ng.timing_gpu(runs=5)
-r8.timing_gpu(runs=5)
-r52.timing_gpu(runs=5)
+ng.timing_gpu(runs=10)
+r8.timing_gpu(runs=10)
+r52.timing_gpu(runs=10)
 
 # Timing CPU
-ng.timing_cpu(runs=5)
+ng.timing_cpu(runs=10)
 ng.plot_timing(score_label='Accuracy Score')
 
 # Table top 10 features for Born classifier
@@ -47,7 +47,7 @@ ng.table_explanation(top=10)
 ng.plot_explanation(c=9, batch_size=128, random_state=0)
 
 # Train the networks and plot the learning curves
-scores = ng.learning_curve(epochs=1000, runs=5, batch_size=128)
+scores = ng.learning_curve(epochs=1000, runs=10, batch_size=128)
 ng.plot_learning_curve(score_label="Accuracy Score", loss_label="Log-Loss")
 
 # Run and plot the ablation study
