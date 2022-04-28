@@ -9,18 +9,11 @@ repository = "https://github.com/eguidotti/bornrule"
 homepage = "https://github.com/eguidotti/bornrule"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.6"
 scipy = "^1.0"
 scikit-learn = "*"
 pandas = "*"
 numpy = "*"
-
-[tool.poetry.dev-dependencies]
-SQLAlchemy = "^1.4.32"
-torch = "^1.11.0"
-matplotlib = "^3.5.1"
-bs4 = "^0.0.1"
-nltk = "^3.7"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
