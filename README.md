@@ -77,8 +77,7 @@ pip install bs4==0.0.1 nltk==3.7 matplotlib==3.5.1
 
 Install [`pytorch`](https://pytorch.org) version `1.11.0` with GPU support. For CUDA 11.5 the command is:
 ```commandline
-pip install torch==1.11.0+cu115 -f https://download.pytorch.org/whl/torch_stab
-le.html
+pip install torch==1.11.0+cu115 -f https://download.pytorch.org/whl/torch_stable.html
 ```
 
 Install [`cupy`](https://docs.cupy.dev/en/stable/install.html) version `10.4.0`. For CUDA 11.5 the command is:
