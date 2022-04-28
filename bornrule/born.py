@@ -33,7 +33,7 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             sample_weight = self.check_sample_weight_(sample_weight, X)
             y = self.multiply_(y, sample_weight.reshape(-1, 1))
 
-        corpus = self.multiply_(X, 1. / self.sum_(X, axis=1)).T @ y
+        corpus = self.normalize_(X, axis=1).T @ y
         self.corpus_ = corpus if self.corpus_ is None else self.corpus_ + corpus
 
         return self
@@ -47,9 +47,8 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
                 f"This {self.__class__.__name__} instance is not fitted yet. "
                 "Call 'fit' with appropriate arguments before using this estimator.")
 
-        X = self.sanitize_(X)
-        u = self.power_(self.power_(X, self.a) @ self.get_weights_(), 1. / self.a)
-        y = self.multiply_(u, 1. / self.sum_(u, axis=1))
+        u = self.power_(self.power_(self.sanitize_(X), self.a) @ self.get_weights_(), 1. / self.a)
+        y = self.normalize_(u, axis=1)
 
         if self.sparse_.issparse(y):
             y = self.dense_.asarray(y.todense())
@@ -65,22 +64,12 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
     def get_weights_(self):
         if self.weights_ is None:
             C_ji = self.corpus_
-
             if self.b != 0:
-                # sum per class
-                C_i = self.sum_(self.corpus_, axis=0)
-                # invert non-zero elements
-                C_i = self.power_(C_i, -self.b)
                 # normalize over the classes
-                C_ji = self.multiply_(C_ji, C_i)
-
+                C_ji = self.normalize_(C_ji, axis=0, p=-self.b)
             if self.b != 1:
-                # sum per feature
-                C_j = self.sum_(self.corpus_, axis=1)
-                # invert non-zero elements
-                C_j = self.power_(C_j, self.b - 1)
                 # normalize over the features
-                C_ji = self.multiply_(C_ji, C_j)
+                C_ji = self.normalize_(C_ji, axis=1, p=self.b - 1)
 
             W_ji = self.power_(C_ji, self.a)
             if self.h != 0:
@@ -107,39 +96,40 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
         return self.dense_.multiply(x, y)
 
-    def power_(self, x, p):
+    def power_(self, x, p, inplace=False):
+        if not inplace:
+            x = x.copy()
+
         if self.sparse_.issparse(x):
-            return x.power(p)
+            x.data = self.dense_.power(x.data, p)
 
-        if self.gpu_:
-            if p > 0:
-                return self.dense_.power(x, p)
+        elif self.gpu_:
+            nz = self.dense_.nonzero(x)
+            x[nz] = self.dense_.power(x[nz], p)
 
-            else:
-                x = x.copy()
-                nz = self.dense_.nonzero(x)
-                x[nz] = self.dense_.power(x[nz], p)
-                return x
+        else:
+            self.dense_.power(x, p, out=x, where=x != 0)
 
-        return self.dense_.power(x, p, where=True if p > 0 else x != 0)
+        return x
 
-    def log_(self, x):
-        x = x.copy()
+    def log_(self, x, inplace=False):
+        if not inplace:
+            x = x.copy()
 
         if self.sparse_.issparse(x):
             x.data = self.dense_.log(x.data)
 
-        else:
+        elif self.gpu_:
             nz = self.dense_.nonzero(x)
             x[nz] = self.dense_.log(x[nz])
 
+        else:
+            self.dense_.log(x, out=x, where=x != 0)
+
         return x
 
-    def normalize_(self, x, axis):
-        n = self.sum_(x, axis=axis)
-        n = self.power_(n, -1)
-
-        return self.multiply_(x, n)
+    def normalize_(self, x, axis, p=-1):
+        return self.multiply_(x, self.power_(self.sum_(x, axis=axis), p, inplace=True))
 
     def sanitize_(self, X, y=None):
         if self.gpu_:
