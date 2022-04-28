@@ -49,7 +49,7 @@ If you are running a linux distribution with CUDA 11.5, use the following comman
 
 - download [`poetry`](https://python-poetry.org)
 - create a virtual environment with python 3.9
-- install the dependencies
+- install this project and additional dependencies
 - run the replication code in `nips.py`
 
 ```commandline
