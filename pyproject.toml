@@ -15,6 +15,13 @@ scikit-learn = "*"
 pandas = "*"
 numpy = "*"
 
+[tool.poetry.dev-dependencies]
+matplotlib = "^3.5.1"
+bs4 = "^0.0.1"
+nltk = "^3.7"
+cupy-cuda115 = "^10.4.0"
+torch = {url = "https://download.pytorch.org/whl/cu115/torch-1.11.0%2Bcu115-cp39-cp39-linux_x86_64.whl"}
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
