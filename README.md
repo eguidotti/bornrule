@@ -40,12 +40,24 @@ from bornrule.sql import BornClassifierSQL
 
 ## Paper replication
 
-Install the dependencies:
+All the results in the paper are obtained using Python 3.9 on a Google Cloud Virtual Machine equipped with 
+CentOS 7, 12 vCPU Intel Cascade Lake 85 GB RAM, 1 GPU NVIDIA Tesla A100, and CUDA 11.5.
 
-```bash
-pip install -r requirements.txt
+
+Install this project with `poetry`: 
+
+```commandline
+pip install poetry
+poetry install
 ```
 
-Run the script `nips.py`. It may take a few days to complete. 
-All the results are obtained using Python 3.9 on a Google Cloud Virtual Machine equipped with 
-CentOS 7, 12 vCPU Intel Cascade Lake 85 GB RAM, 1 GPU NVIDIA Tesla A100.
+Install [`cupy`](https://docs.cupy.dev/en/stable/install.html). For CUDA 11.5 the command is:
+```commandline
+pip install cupy-cuda115
+```
+
+Run the script `nips.py`:
+
+```commandline
+python -u nips.py > nips.log &
+```
