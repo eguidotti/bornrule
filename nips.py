@@ -1,23 +1,34 @@
+import torch
 from nips.experiment import Experiment
 from nips.metrics import log_loss
 from sklearn.metrics import accuracy_score
 
 # Setup experiments:
-# - dataset: one of '20ng', 'r8', 'r52'
 # - loss: the loss used to train neural networks
 # - score: the metric to evaluate the classification results
 # - needs_proba: True if score requires probabilities rather than predicted classes
+# - device: the torch device (CPU/GPU)
 # - data_dir: the directory where data are to be downloaded
 # - output_dir: the directory where results are to be saved
-ng = Experiment(dataset='20ng', loss=log_loss, score=accuracy_score, needs_proba=False)
+kwargs = {
+    'loss': log_loss,
+    'score': accuracy_score,
+    'needs_proba': False,
+    'device': torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'),
+    'data_dir': 'data',
+    'output_dir': 'results',
+}
+
+# 20NG dataset
+ng = Experiment(dataset='20ng', **kwargs)
 ng.data.summary()
 
 # R8 dataset
-r8 = Experiment(dataset='r8', loss=log_loss, score=accuracy_score, needs_proba=False)
+r8 = Experiment(dataset='r8', **kwargs)
 r8.data.summary()
 
 # R52 dataset
-r52 = Experiment(dataset='r52', loss=log_loss, score=accuracy_score, needs_proba=False)
+r52 = Experiment(dataset='r52', **kwargs)
 r52.data.summary()
 
 # Timing GPU

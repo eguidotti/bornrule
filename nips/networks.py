@@ -7,9 +7,9 @@ from bornrule.torch import Born
 
 class Quantum(torch.nn.Module):
 
-    def __init__(self, in_features, out_features, Xy=None):
+    def __init__(self, in_features, out_features, Xy=None, device=None):
         super().__init__()
-        self.born = Born(in_features=in_features, out_features=out_features)
+        self.born = Born(in_features=in_features, out_features=out_features, device=device)
 
         if Xy is not None:
             weight = BornClassifier().fit(Xy[0], Xy[1]).explain()
@@ -17,7 +17,8 @@ class Quantum(torch.nn.Module):
             if sparse.issparse(weight):
                 weight = weight.todense()
 
-            weight = torch.tensor(np.array([weight, np.zeros_like(weight)]), dtype=torch.get_default_dtype())
+            weight = torch.tensor(np.array([weight, np.zeros_like(weight)]))
+            weight = weight.to(dtype=torch.get_default_dtype(), device=device)
             self.born.weight = torch.nn.Parameter(weight)
 
     def forward(self, x):

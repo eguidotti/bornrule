@@ -21,12 +21,12 @@ from .networks import Quantum
 
 class Experiment:
 
-    def __init__(self, dataset, loss, score, needs_proba=False, data_dir="data", output_dir="results"):
+    def __init__(self, dataset, loss, score, needs_proba=False, device='cpu', data_dir="data", output_dir="results"):
         self.loss = loss
         self.score, self.needs_proba = score, needs_proba
         self.scorer = metrics.make_scorer(self.score, greater_is_better=True, needs_proba=needs_proba)
-
         self.data = Dataset(dataset, output_dir=data_dir)
+        self.device = torch.device(device)
 
         self.output_dir = output_dir
         if not os.path.exists(output_dir):
@@ -340,9 +340,9 @@ class Experiment:
             train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
 
             nets = {
-                'BC': Quantum(in_features, out_features, (X_train, y_train)),
-                'BC+BL': Quantum(in_features, out_features, (X_train, y_train)),
-                'BL': Quantum(in_features, out_features),
+                'BC': Quantum(in_features, out_features, (X_train, y_train), device=self.device),
+                'BC+BL': Quantum(in_features, out_features, (X_train, y_train), device=self.device),
+                'BL': Quantum(in_features, out_features, device=self.device),
             }
 
             for name, net in nets.items():
@@ -505,11 +505,10 @@ class Experiment:
         for batch_idxs in np.array_split(idxs, batch_size):
             yield self.to_tensor(X[batch_idxs]), self.to_tensor(y[batch_idxs])
 
-    @staticmethod
-    def to_tensor(x):
+    def to_tensor(self, x):
         if sparse.issparse(x):
             x = x.tocoo()
             i = torch.LongTensor(np.vstack((x.row, x.col)))
             v = torch.tensor(x.data, dtype=torch.get_default_dtype())
-            return torch.sparse_coo_tensor(i, v, torch.Size(x.shape))
-        return torch.tensor(x, dtype=torch.get_default_dtype())
+            return torch.sparse_coo_tensor(i, v, torch.Size(x.shape), device=self.device)
+        return torch.tensor(x, dtype=torch.get_default_dtype(), device=self.device)
