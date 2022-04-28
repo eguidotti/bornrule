@@ -33,7 +33,7 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             sample_weight = self.check_sample_weight_(sample_weight, X)
             y = self.multiply_(y, sample_weight.reshape(-1, 1))
 
-        corpus = self.normalize_(X, axis=1).T @ y
+        corpus = X.T @ self.multiply_(y, self.power_(self.sum_(X, axis=1), -1))
         self.corpus_ = corpus if self.corpus_ is None else self.corpus_ + corpus
 
         return self
@@ -96,40 +96,32 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
         return self.dense_.multiply(x, y)
 
-    def power_(self, x, p, inplace=False):
-        if not inplace:
-            x = x.copy()
+    def power_(self, x, p):
+        x = x.copy()
 
         if self.sparse_.issparse(x):
             x.data = self.dense_.power(x.data, p)
 
-        elif self.gpu_:
+        else:
             nz = self.dense_.nonzero(x)
             x[nz] = self.dense_.power(x[nz], p)
 
-        else:
-            self.dense_.power(x, p, out=x, where=x != 0)
-
         return x
 
-    def log_(self, x, inplace=False):
-        if not inplace:
-            x = x.copy()
+    def log_(self, x):
+        x = x.copy()
 
         if self.sparse_.issparse(x):
             x.data = self.dense_.log(x.data)
 
-        elif self.gpu_:
+        else:
             nz = self.dense_.nonzero(x)
             x[nz] = self.dense_.log(x[nz])
-
-        else:
-            self.dense_.log(x, out=x, where=x != 0)
 
         return x
 
     def normalize_(self, x, axis, p=-1):
-        return self.multiply_(x, self.power_(self.sum_(x, axis=axis), p, inplace=True))
+        return self.multiply_(x, self.power_(self.sum_(x, axis=axis), p))
 
     def sanitize_(self, X, y=None):
         if self.gpu_:
