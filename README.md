@@ -43,12 +43,36 @@ from bornrule.sql import BornClassifierSQL
 All the results in the paper are obtained using Python 3.9 on a Google Cloud Virtual Machine equipped with 
 CentOS 7, 12 vCPU Intel Cascade Lake 85 GB RAM, 1 GPU NVIDIA Tesla A100, and CUDA 11.5.
 
+### Poetry
 
-Install this project with [`poetry`](https://python-poetry.org): 
+If you are running a linux distribution with CUDA 11.5, use the following commands to:
+
+- download [`poetry`](https://python-poetry.org)
+- create a virtual environment with python 3.9
+- install the dependencies
+- run the replication code in `nips.py`
 
 ```commandline
 pip install poetry
+poetry env use python3.9
 poetry install
+poetry run python -u nips.py > nips.log &
+```
+
+### Pip
+
+If you are not running a linux distribution with CUDA 11.5, use `pip` as follows.
+
+Install this project:
+
+```commandline
+pip install .
+```
+
+Install additional dependencies to replicate the paper:
+
+```commandline
+pip install bs4==0.0.1 nltk==3.7 matplotlib==3.5.1
 ```
 
 Install [`pytorch`](https://pytorch.org) version `1.11.0` with GPU support. For CUDA 11.5 the command is:
