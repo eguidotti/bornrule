@@ -412,7 +412,7 @@ class Experiment:
             'eval': False
         }
 
-        net = Quantum(X_train.shape[1], len(np.unique(y_train)))
+        net = Quantum(X_train.shape[1], len(np.unique(y_train)), device=self.device)
         w0 = torch.clone(net.born.weight.data)
         w0 = torch.complex(real=w0[0], imag=w0[1])
 
