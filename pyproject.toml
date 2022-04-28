@@ -9,18 +9,11 @@ repository = "https://github.com/eguidotti/bornrule"
 homepage = "https://github.com/eguidotti/bornrule"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.6"
 numpy = "*"
 scipy = "^1.0"
 pandas = "*"
 scikit-learn = "*"
-
-[tool.poetry.dev-dependencies]
-bs4 = "0.0.1"
-nltk = "3.7"
-matplotlib = "3.5.1"
-cupy-cuda115 = "10.4.0"
-torch = {url = "https://download.pytorch.org/whl/cu115/torch-1.11.0%2Bcu115-cp39-cp39-linux_x86_64.whl"}
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
