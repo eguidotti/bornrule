@@ -44,7 +44,7 @@ All the results in the paper are obtained using Python 3.9 on a Google Cloud Vir
 CentOS 7, 12 vCPU Intel Cascade Lake 85 GB RAM, 1 GPU NVIDIA Tesla A100, and CUDA 11.5.
 
 
-Install this project with `poetry`: 
+Install this project with [`poetry`](https://python-poetry.org): 
 
 ```commandline
 pip install poetry
