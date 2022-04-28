@@ -51,9 +51,15 @@ pip install poetry
 poetry install
 ```
 
-Install [`cupy`](https://docs.cupy.dev/en/stable/install.html). For CUDA 11.5 the command is:
+Install [`pytorch`](https://pytorch.org) version `1.11.0` with GPU support. For CUDA 11.5 the command is:
 ```commandline
-pip install cupy-cuda115
+pip install torch==1.11.0+cu115 -f https://download.pytorch.org/whl/torch_stab
+le.html
+```
+
+Install [`cupy`](https://docs.cupy.dev/en/stable/install.html) version `10.4.0`. For CUDA 11.5 the command is:
+```commandline
+pip install cupy-cuda115==10.4.0
 ```
 
 Run the script `nips.py`:
