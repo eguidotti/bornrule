@@ -483,7 +483,7 @@ class Experiment:
 
                         scores.append({
                             'epoch': epoch + (batch_idx + 1) / n_batches,
-                            'score': self.score(y_true, y_pred),
+                            'score': self.score(y_true.cpu(), y_pred.cpu()),
                             'loss': self.loss(outputs, labels).item(),
                             'time_train': time_train,
                         })
