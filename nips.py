@@ -1,6 +1,6 @@
 import torch
+from nips.metrics import l1_loss
 from nips.experiment import Experiment
-from nips.metrics import log_loss
 from sklearn.metrics import accuracy_score
 
 # Setup experiments:
@@ -11,7 +11,7 @@ from sklearn.metrics import accuracy_score
 # - data_dir: the directory where data are to be downloaded
 # - output_dir: the directory where results are to be saved
 kwargs = {
-    'loss': log_loss,
+    'loss': l1_loss,
     'score': accuracy_score,
     'needs_proba': False,
     'device': torch.device('cuda:0' if torch.cuda.is_available() else 'cpu'),
@@ -19,40 +19,55 @@ kwargs = {
     'output_dir': 'results',
 }
 
-# 20NG dataset
-ng = Experiment(dataset='20ng', **kwargs)
-ng.data.summary()
 
 # R8 dataset
 r8 = Experiment(dataset='r8', **kwargs)
 r8.data.summary()
+
+# Timing GPU
+r8.timing_gpu(runs=10)
+
+# Train the networks and plot the learning curves
+r8.learning_curve(epochs=1000, runs=10, batch_size=128)
+r8.plot_learning_curve(score_label="Accuracy Score", loss_label="L1-Loss")
+
 
 # R52 dataset
 r52 = Experiment(dataset='r52', **kwargs)
 r52.data.summary()
 
 # Timing GPU
-ng.timing_gpu(runs=10)
-r8.timing_gpu(runs=10)
 r52.timing_gpu(runs=10)
 
-# Timing CPU
-ng.timing_cpu(runs=10)
-ng.plot_timing(score_label='Accuracy Score')
+# Train the networks and plot the learning curves
+r52.learning_curve(epochs=1000, runs=10, batch_size=128)
+r52.plot_learning_curve(score_label="Accuracy Score", loss_label="L1-Loss")
 
-# Table top 10 features for Born classifier
-ng.table_explanation(top=10)
+
+# 20NG dataset
+ng = Experiment(dataset='20ng', **kwargs)
+ng.data.summary()
+
+# Timing GPU
+ng.timing_gpu(runs=10)
+
+# Train the networks and plot the learning curves
+ng.learning_curve(epochs=1000, runs=10, batch_size=128)
+ng.plot_learning_curve(score_label="Accuracy Score", loss_label="L1-Loss")
 
 # Plot explanation of Born layer for class 9 (baseball)
 ng.plot_explanation(c=9, batch_size=128, random_state=0)
 
-# Train the networks and plot the learning curves
-scores = ng.learning_curve(epochs=1000, runs=10, batch_size=128)
-ng.plot_learning_curve(score_label="Accuracy Score", loss_label="Log-Loss")
+# Table top 10 features for Born classifier
+ng.table_explanation(top=10)
 
 # Run and plot the ablation study
 ng.ablation_study()
 ng.plot_ablation()
 
-# Table cross-validation times and scores (takes 24-48 h)
+# Timing CPU (takes a few hours)
+ng.timing_cpu(runs=10)
+ng.plot_timing(score_label='Accuracy Score')
+
+# Table cross-validation times and scores (takes 24-48 hours)
 ng.cross_validation()
