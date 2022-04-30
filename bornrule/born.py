@@ -123,15 +123,15 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
     def normalize_(self, x, axis, p=-1):
         return self.multiply_(x, self.power_(self.sum_(x, axis=axis), p))
 
-    def sanitize_(self, X, y=None):
+    def sanitize_(self, X, y=None, dtype=(numpy.float32, numpy.float64)):
         if self.gpu_:
             return X if y is None else (X, y)
 
         elif y is None:
-            return check_array(X, accept_sparse='csr')
+            return check_array(X, accept_sparse='csr', dtype=dtype)
 
         else:
-            return check_X_y(X, y, accept_sparse='csr', multi_output=True)
+            return check_X_y(X, y, accept_sparse='csr', multi_output=True, dtype=dtype)
 
     def check_sample_weight_(self, sample_weight, X):
         if self.gpu_:
