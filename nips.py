@@ -28,7 +28,7 @@ r8.data.summary()
 r8.timing_gpu(runs=10)
 
 # Train the networks and plot the learning curves
-r8.learning_curve(epochs=1000, runs=10, batch_size=128)
+r8.learning_curve(epochs=100, runs=10, batch_size=128)
 r8.plot_learning_curve(score_label="Accuracy Score", loss_label="L1-Loss")
 
 
@@ -40,7 +40,7 @@ r52.data.summary()
 r52.timing_gpu(runs=10)
 
 # Train the networks and plot the learning curves
-r52.learning_curve(epochs=1000, runs=10, batch_size=128)
+r52.learning_curve(epochs=100, runs=10, batch_size=128)
 r52.plot_learning_curve(score_label="Accuracy Score", loss_label="L1-Loss")
 
 
@@ -52,11 +52,11 @@ ng.data.summary()
 ng.timing_gpu(runs=10)
 
 # Train the networks and plot the learning curves
-ng.learning_curve(epochs=1000, runs=10, batch_size=128)
+ng.learning_curve(epochs=100, runs=10, batch_size=128)
 ng.plot_learning_curve(score_label="Accuracy Score", loss_label="L1-Loss")
 
 # Plot explanation of Born layer for class 9 (baseball)
-ng.plot_explanation(c=9, batch_size=128, random_state=0)
+ng.plot_explanation(c=9, batch_size=128, random_state=51)
 
 # Table top 10 features for Born classifier
 ng.table_explanation(top=10)
