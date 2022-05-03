@@ -331,7 +331,7 @@ class Experiment:
 
         return top10
 
-    def learning_curve(self, epochs=1, runs=1, batch_size=128):
+    def learning_curve(self, epochs, runs, batch_size):
         scores = []
         file = self.output_dir + "/" + self.data.dataset + "_learning_curve.csv"
         for run in range(runs):
@@ -372,8 +372,9 @@ class Experiment:
         for column in ['score', 'loss']:
             df[f"{column} err"] = df[f"{column} std"] / np.sqrt(df["run count"])
 
-        print("--- Score at the last epoch")
-        print(df[df['epoch'] == max(df['epoch'])][['model', 'score mean', 'score err']])
+        for i in [1, 10, 100]:
+            print("--- Epoch", i)
+            print(df[df['epoch'] == i][['model', 'score mean', 'score err', 'time_train mean']])
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 3.3))
         plt.tight_layout(pad=3, rect=(0, 0, 1, 0.95))
@@ -400,7 +401,7 @@ class Experiment:
         fig.savefig(file, bbox_inches='tight', format='png', dpi=300)
         print(f"Image saved in {file}")
 
-    def plot_explanation(self, c, batch_size=128, random_state=123):
+    def plot_explanation(self, c, batch_size, random_state=123):
         torch.manual_seed(random_state)
         X_train, X_test, y_train, y_test = self.data.split(random_state=random_state)
         train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
