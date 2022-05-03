@@ -27,7 +27,7 @@ from bornrule.torch import Born
 ```
 - Use it like any other `torch` layer
 - Supports real and complex-valued inputs
-- Output: probabilities in the range [0,1]
+- Output: probabilities in the range [0, 1]
 
 ### SQL
 
@@ -70,3 +70,6 @@ Run the script `nips.py`:
 ```commandline
 python -u nips.py > nips.log &
 ```
+
+The script generates a folder named `results` with all the results in the paper. Additional information are saved to the log file `nips.log`
+
