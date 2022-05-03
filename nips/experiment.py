@@ -16,7 +16,7 @@ from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from bornrule import BornClassifier
 from .dataset import Dataset
-from .networks import Quantum
+from .networks import BornSqrt
 
 
 class Experiment:
@@ -340,9 +340,9 @@ class Experiment:
             train_batches, test_data = self.to_torch(X_train, X_test, y_train, y_test, batch_size)
 
             nets = {
-                'BC': Quantum(in_features, out_features, (X_train, y_train), device=self.device),
-                'BC+BL': Quantum(in_features, out_features, (X_train, y_train), device=self.device),
-                'BL': Quantum(in_features, out_features, device=self.device),
+                'BC': BornSqrt(in_features, out_features, (X_train, y_train), device=self.device),
+                'BC+BL': BornSqrt(in_features, out_features, (X_train, y_train), device=self.device),
+                'BL': BornSqrt(in_features, out_features, device=self.device),
             }
 
             for name, net in nets.items():
@@ -413,7 +413,7 @@ class Experiment:
             'eval': False
         }
 
-        net = Quantum(X_train.shape[1], len(np.unique(y_train)), device=self.device)
+        net = BornSqrt(X_train.shape[1], len(np.unique(y_train)), device=self.device)
         w0 = torch.clone(net.born.weight.data)
         w0 = torch.complex(real=w0[0], imag=w0[1]).cpu()
 
@@ -512,4 +512,5 @@ class Experiment:
             i = torch.LongTensor(np.vstack((x.row, x.col)))
             v = torch.tensor(x.data, dtype=torch.get_default_dtype())
             return torch.sparse_coo_tensor(i, v, torch.Size(x.shape), device=self.device)
+
         return torch.tensor(x, dtype=torch.get_default_dtype(), device=self.device)

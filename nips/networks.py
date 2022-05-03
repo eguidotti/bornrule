@@ -5,7 +5,7 @@ from bornrule import BornClassifier
 from bornrule.torch import Born
 
 
-class Quantum(torch.nn.Module):
+class BornSqrt(torch.nn.Module):
 
     def __init__(self, in_features, out_features, Xy=None, device=None):
         super().__init__()
