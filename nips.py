@@ -24,8 +24,10 @@ kwargs = {
 r8 = Experiment(dataset='r8', **kwargs)
 r8.data.summary()
 
-# Timing GPU
+# Timing
 r8.timing_gpu(runs=10)
+r8.timing_cpu(runs=10)
+r8.plot_timing(score_label='Accuracy Score')
 
 # Train the networks and plot the learning curves
 r8.learning_curve(epochs=100, runs=10, batch_size=128)
@@ -36,8 +38,10 @@ r8.plot_learning_curve(score_label="Accuracy Score", loss_label="L1-Loss")
 r52 = Experiment(dataset='r52', **kwargs)
 r52.data.summary()
 
-# Timing GPU
+# Timing
 r52.timing_gpu(runs=10)
+r52.timing_cpu(runs=10)
+r52.plot_timing(score_label='Accuracy Score')
 
 # Train the networks and plot the learning curves
 r52.learning_curve(epochs=100, runs=10, batch_size=128)
@@ -50,6 +54,8 @@ ng.data.summary()
 
 # Timing GPU
 ng.timing_gpu(runs=10)
+ng.timing_cpu(runs=10)
+ng.plot_timing(score_label='Accuracy Score')
 
 # Train the networks and plot the learning curves
 ng.learning_curve(epochs=100, runs=10, batch_size=128)
@@ -61,13 +67,9 @@ ng.plot_explanation(c=9, batch_size=128, random_state=51)
 # Table top 10 features for Born classifier
 ng.table_explanation(top=10)
 
-# Run and plot the ablation study
+# Ablation study
 ng.ablation_study()
 ng.plot_ablation()
-
-# Timing CPU (takes a few hours)
-ng.timing_cpu(runs=10)
-ng.plot_timing(score_label='Accuracy Score')
 
 # Table cross-validation times and scores (takes 24-48 hours)
 ng.cross_validation()
