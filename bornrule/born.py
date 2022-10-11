@@ -59,7 +59,12 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
         if X is None:
             return self.get_weights_()
 
-        return self.multiply_(self.get_weights_(), self.power_(self.sanitize_(X).T, self.a))
+        X = self.sanitize_(X)
+        X = self.normalize_(X, axis=1)
+        X = self.power_(X, self.a)
+        X = self.sum_(X, axis=0)
+
+        return self.multiply_(self.get_weights_(), X.T)
 
     def get_weights_(self):
         if self.weights_ is None:
