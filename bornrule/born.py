@@ -55,16 +55,19 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
         return y
 
-    def explain(self, X=None):
+    def explain(self, X=None, sample_weight=None):
         if X is None:
             return self.get_weights_()
 
         X = self.sanitize_(X)
         X = self.normalize_(X, axis=1)
         X = self.power_(X, self.a)
-        X = self.sum_(X, axis=0)
 
-        return self.multiply_(self.get_weights_(), X.T)
+        if sample_weight is not None:
+            sample_weight = self.check_sample_weight_(sample_weight, X)
+            X = self.multiply_(X, sample_weight.reshape(-1, 1))
+
+        return self.multiply_(self.get_weights_(), self.sum_(X, axis=0).T)
 
     def get_weights_(self):
         if self.weights_ is None:
