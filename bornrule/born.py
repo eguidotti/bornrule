@@ -1,199 +1,258 @@
 import numpy
 import scipy.sparse
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.utils.validation import check_X_y, check_array, _check_sample_weight
+from sklearn.utils.validation import _check_sample_weight
 from sklearn.utils.multiclass import unique_labels
 from sklearn.exceptions import NotFittedError
 
 
 class BornClassifier(ClassifierMixin, BaseEstimator):
 
-    def __init__(self, a=0.5, b=1, h=1):
-        self.a, self.b, self.h = a, b, h
-        self.corpus_, self.classes_, self.weights_ = None, None, None
-        self.gpu_, self.dense_, self.sparse_ = False, numpy, scipy.sparse
-
-    def set_params(self, **params):
-        self.weights_ = None
-        return super().set_params(**params)
+    def __init__(self, a=0.5, b=1., h=1.):
+        self.a = a
+        self.b = b
+        self.h = h
 
     def fit(self, X, y, sample_weight=None):
-        self.reset_(X, y)
+        attrs = [
+            "gpu_",
+            "corpus_",
+            "classes_",
+            "n_features_in_"
+        ]
+
+        for attr in attrs:
+            if hasattr(self, attr):
+                delattr(self, attr)
+
         return self.partial_fit(X, y, classes=y, sample_weight=sample_weight)
 
     def partial_fit(self, X, y, classes=None, sample_weight=None):
-        self.weights_ = None
-        X, y = self.sanitize_(X, y)
-        self.check_partial_fit_first_call_(classes)
+        X, y = self._sanitize(X, y)
 
-        if not self.sparse_.issparse(y) and y.ndim == 1:
-            y = self.one_hot_(y)
+        first_call = self._check_partial_fit_first_call(classes)
+        if first_call:
+            self.n_features_in_ = X.shape[1]
+
+        if not self._check_encoded(y):
+            y = self._one_hot_encoding(y)
 
         if sample_weight is not None:
-            sample_weight = self.check_sample_weight_(sample_weight, X)
-            y = self.multiply_(y, sample_weight.reshape(-1, 1))
+            sample_weight = self._check_sample_weight(sample_weight, X)
+            y = self._multiply(y, sample_weight.reshape(-1, 1))
 
-        corpus = X.T @ self.multiply_(y, self.power_(self.sum_(X, axis=1), -1))
-        self.corpus_ = corpus if self.corpus_ is None else self.corpus_ + corpus
+        corpus = X.T @ self._multiply(y, self._power(self._sum(X, axis=1), -1))
+        self.corpus_ = corpus if first_call else self.corpus_ + corpus
 
         return self
 
     def predict(self, X):
-        return self.classes_[self.dense_.argmax(self.predict_proba(X), axis=1)]
+        proba = self.predict_proba(X)
+        idx = self._dense().argmax(proba, axis=1)
+        
+        return self.classes_[idx]
 
     def predict_proba(self, X):
-        if self.corpus_ is None:
-            raise NotFittedError(
-                f"This {self.__class__.__name__} instance is not fitted yet. "
-                "Call 'fit' with appropriate arguments before using this estimator.")
+        self._check_fitted()
 
-        u = self.power_(self.power_(self.sanitize_(X), self.a) @ self.get_weights_(), 1. / self.a)
-        y = self.normalize_(u, axis=1)
+        X = self._sanitize(X)
+        u = self._power(self._power(X, self.a) @ self._weights(), 1. / self.a)
+        y = self._normalize(u, axis=1)
 
-        if self.sparse_.issparse(y):
-            y = self.dense_.asarray(y.todense())
+        if self._sparse().issparse(y):
+            y = self._dense().asarray(y.todense())
 
         return y
 
     def explain(self, X=None, sample_weight=None):
-        if X is None:
-            return self.get_weights_()
+        self._check_fitted()
 
-        X = self.sanitize_(X)
-        X = self.normalize_(X, axis=1)
-        X = self.power_(X, self.a)
+        if X is None:
+            return self._weights()
+
+        X = self._sanitize(X)
+        X = self._normalize(X, axis=1)
+        X = self._power(X, self.a)
 
         if sample_weight is not None:
-            sample_weight = self.check_sample_weight_(sample_weight, X)
-            X = self.multiply_(X, sample_weight.reshape(-1, 1))
+            sample_weight = self._check_sample_weight(sample_weight, X)
+            X = self._multiply(X, sample_weight.reshape(-1, 1))
 
-        return self.multiply_(self.get_weights_(), self.sum_(X, axis=0).T)
+        return self._multiply(self._weights(), self._sum(X, axis=0).T)
 
-    def get_weights_(self):
-        if self.weights_ is None:
-            C_ji = self.corpus_
-            if self.b != 0:
-                # normalize over the classes
-                C_ji = self.normalize_(C_ji, axis=0, p=-self.b)
-            if self.b != 1:
-                # normalize over the features
-                C_ji = self.normalize_(C_ji, axis=1, p=self.b - 1)
+    def _dense(self):
+        return cupy if self.gpu_ else numpy
 
-            W_ji = self.power_(C_ji, self.a)
-            if self.h != 0:
-                # probability of class i given feature j
-                P_ji = self.normalize_(C_ji, axis=1)
-                # compute entropy per feature
-                H_j = 1 + self.sum_(self.multiply_(P_ji, self.log_(P_ji)), axis=1) / self.dense_.log(P_ji.shape[1])
-                # regularize the weights
-                W_ji = self.multiply_(W_ji, self.power_(H_j, self.h))
+    def _sparse(self):
+        return cupy.sparse if self.gpu_ else scipy.sparse
 
-            self.weights_ = W_ji
+    def _weights(self):
+        C_ji = self.corpus_
+        if self.b != 0:
+            C_ji = self._normalize(C_ji, axis=0, p=self.b)
+        if self.b != 1:
+            C_ji = self._normalize(C_ji, axis=1, p=1-self.b)
 
-        return self.weights_
+        W_ji = self._power(C_ji, self.a)
+        if self.h != 0:
+            P_ji = self._normalize(C_ji, axis=1)
+            H_j = 1 + self._sum(self._multiply(P_ji, self._log(P_ji)), axis=1) / self._dense().log(P_ji.shape[1])
+            W_ji = self._multiply(W_ji, self._power(H_j, self.h))
 
-    def sum_(self, x, axis):
-        if self.sparse_.issparse(x):
+        return W_ji
+
+    def _sum(self, x, axis):
+        if self._sparse().issparse(x):
             return x.sum(axis=axis)
 
         return x.sum(axis=axis, keepdims=True)
 
-    def multiply_(self, x, y):
-        if self.sparse_.issparse(x):
+    def _multiply(self, x, y):
+        if self._sparse().issparse(x):
             return x.multiply(y).tocsr()
 
-        return self.dense_.multiply(x, y)
+        return self._dense().multiply(x, y)
 
-    def power_(self, x, p):
+    def _power(self, x, p):
         x = x.copy()
 
-        if self.sparse_.issparse(x):
-            x.data = self.dense_.power(x.data, p)
+        if self._sparse().issparse(x):
+            x.data = self._dense().power(x.data, p)
 
         else:
-            nz = self.dense_.nonzero(x)
-            x[nz] = self.dense_.power(x[nz], p)
+            nz = self._dense().nonzero(x)
+            x[nz] = self._dense().power(x[nz], p)
 
         return x
 
-    def log_(self, x):
+    def _log(self, x):
         x = x.copy()
 
-        if self.sparse_.issparse(x):
-            x.data = self.dense_.log(x.data)
+        if self._sparse().issparse(x):
+            x.data = self._dense().log(x.data)
 
         else:
-            nz = self.dense_.nonzero(x)
-            x[nz] = self.dense_.log(x[nz])
+            nz = self._dense().nonzero(x)
+            x[nz] = self._dense().log(x[nz])
 
         return x
 
-    def normalize_(self, x, axis, p=-1):
-        return self.multiply_(x, self.power_(self.sum_(x, axis=axis), p))
+    def _normalize(self, x, axis, p=1.):
+        s = self._sum(x, axis)
+        n = self._power(s, -p)
 
-    def sanitize_(self, X, y=None, dtype=(numpy.float32, numpy.float64)):
+        return self._multiply(x, n)
+
+    def _sanitize(self, X, y="no_validation"):
+        only_X = isinstance(y, str) and y == "no_validation"
+
+        gpu = self._check_gpu(X=X, y=y if not only_X else None)
+        if getattr(self, "gpu_", None) is None:
+            self.gpu_ = gpu
+
+        elif self.gpu_ != gpu:
+            raise ValueError(
+                "X is not on the same device (CPU/GPU) as on last call "
+                "to partial_fit, was: %r" % (self.gpu_, ))
+
+        if not self.gpu_:
+            kwargs = {
+                "accept_sparse": "csr",
+                "reset": False,
+                "dtype": (numpy.float32, numpy.float64)
+            }
+
+            if only_X:
+                X = super()._validate_data(X=X, **kwargs)
+
+            else:
+                X, y = super()._validate_data(X=X, y=y, multi_output=self._check_encoded(y), **kwargs)
+
+            if not self._check_non_negative(X):
+                raise ValueError("X must contain non-negative values")
+
+        return X if only_X else (X, y)
+
+    def _unique_labels(self, y):
+        if self._check_encoded(y):
+            return self._dense().arange(0, y.shape[1])
+
+        elif self.gpu_:
+            return self._dense().unique(y)
+
+        else:
+            return unique_labels(y)
+
+    def _one_hot_encoding(self, y):
+        classes = self.classes_
+        n, m = len(y), len(classes)
+
         if self.gpu_:
-            return X if y is None else (X, y)
+            y = y.get()
+            classes = classes.get()
 
-        elif y is None:
-            return check_array(X, accept_sparse='csr', dtype=dtype)
+        unseen = set(y) - set(classes)
+        if unseen:
+            raise ValueError(
+                "`classes=%r` were not allowed on first call "
+                "to partial_fit" % (unseen, ))
 
-        else:
-            return check_X_y(X, y, accept_sparse='csr', multi_output=True, dtype=dtype)
+        idx = {c: i for i, c in enumerate(classes)}
+        col = self._dense().array([idx[c] for c in y])
+        row = self._dense().array(range(0, n))
+        val = self._dense().ones(n)
 
-    def check_sample_weight_(self, sample_weight, X):
+        return self._sparse().csr_matrix((val, (row, col)), shape=(n, m))
+
+    def _check_encoded(self, y):
+        return self._sparse().issparse(y) or (getattr(y, "ndim", 0) == 2 and y.shape[1] > 1)
+
+    def _check_non_negative(self, X):
+        if self._sparse().issparse(X):
+            if self._dense().any(X.data < 0):
+                return False
+
+        elif self._dense().any(X < 0):
+            return False
+
+        return True
+
+    def _check_sample_weight(self, sample_weight, X):
         if self.gpu_:
             return sample_weight
 
         return _check_sample_weight(sample_weight=sample_weight, X=X)
 
-    def check_partial_fit_first_call_(self, classes):
-        if self.classes_ is None and classes is None:
+    def _check_partial_fit_first_call(self, classes):
+        if getattr(self, "classes_", None) is None and classes is None:
             raise ValueError("classes must be passed on the first call to partial_fit.")
 
         elif classes is not None:
-            classes = self.unique_labels_(classes)
+            classes = self._unique_labels(classes)
 
-            if self.classes_ is not None:
-                if not self.dense_.array_equal(self.classes_, classes):
+            if getattr(self, "classes_", None) is not None:
+                if not self._dense().array_equal(self.classes_, classes):
                     raise ValueError(
                         "`classes=%r` is not the same as on last call "
                         "to partial_fit, was: %r" % (classes, self.classes_))
 
             else:
                 self.classes_ = classes
+                return True
 
-    def one_hot_(self, y):
-        n, m = len(y), len(self.classes_)
-        idx = {c: i for i, c in enumerate(self.classes_ if not self.gpu_ else self.classes_.get())}
+        return False
 
-        col = self.dense_.array([idx[c] for c in (y if not self.gpu_ else y.get())])
-        row = self.dense_.array(range(0, n))
-        val = self.dense_.ones(n)
-
-        return self.sparse_.csr_matrix((val, (row, col)), shape=(n, m))
-
-    def unique_labels_(self, y):
-        if self.sparse_.issparse(y) or y.ndim == 2:
-            return self.dense_.arange(0, y.shape[1])
-
-        elif self.gpu_:
-            return self.dense_.unique(y)
-
-        else:
-            return unique_labels(y)
-
-    def reset_(self, X, y):
-        self.corpus_, self.classes_, self.weights_ = None, None, None
-        self.gpu_, self.dense_, self.sparse_ = False, numpy, scipy.sparse
-
+    def _check_gpu(self, X, y=None):
         try:
             import cupy
-            cp_X = cupy.get_array_module(X).__name__ == "cupy"
-            cp_y = cupy.get_array_module(y).__name__ == "cupy"
 
+            cp_X = cupy.get_array_module(X).__name__ == "cupy"
+            if y is None:
+                return cp_X
+
+            cp_y = cupy.get_array_module(y).__name__ == "cupy"
             if cp_X and cp_y:
-                self.gpu_, self.dense_, self.sparse_ = True, cupy, cupy.sparse
+                return True
 
             elif cp_X and not cp_y:
                 raise ValueError("X is on GPU, but y is not.")
@@ -203,3 +262,16 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
         except ModuleNotFoundError:
             pass
+
+        return False
+
+    def _check_fitted(self):
+        if getattr(self, "corpus_", None) is None:
+            raise NotFittedError(
+                f"This {self.__class__.__name__} instance is not fitted yet. "
+                "Call 'fit' with appropriate arguments before using this estimator.")
+
+    def _more_tags(self):
+        return {'requires_y': True,
+                'requires_positive_X': True,
+                'X_types': ['2darray', 'sparse']}
