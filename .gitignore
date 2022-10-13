@@ -132,5 +132,5 @@ dmypy.json
 .DS_Store
 .idea
 data
-results
 poetry.lock
+results*
