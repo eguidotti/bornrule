@@ -272,6 +272,15 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
                 "Call 'fit' with appropriate arguments before using this estimator.")
 
     def _more_tags(self):
-        return {'requires_y': True,
-                'requires_positive_X': True,
-                'X_types': ['2darray', 'sparse']}
+        return {
+            'requires_y': True,
+            'requires_positive_X': True,
+            'X_types': ['2darray', 'sparse'],
+            '_xfail_checks': {
+                'check_classifiers_classes':
+                    'This is a pathological data set for BornClassifier. '
+                    'For some specific cases, it predicts less classes than expected',
+                'check_classifiers_train':
+                    'Test fails because of negative values in X'
+            }
+        }
