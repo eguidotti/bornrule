@@ -1,4 +1,3 @@
-import nltk
 import pytest
 import warnings
 import numpy as np
@@ -15,7 +14,7 @@ train = fetch_20newsgroups(subset='train')
 test = fetch_20newsgroups(subset='test')
 
 # Vectorizer
-vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize, lowercase=False)
+vectorizer = TfidfVectorizer()
 
 # Transform train set
 X_train = vectorizer.fit_transform(train.data)
@@ -33,7 +32,7 @@ def dense(x):
 
 @pytest.mark.parametrize(
     "classifier, accuracy", [
-        (BornClassifier(), 0.87267657992565)
+        (BornClassifier(), 0.863515666489)
     ])
 def test_accuracy(classifier, accuracy):
     classifier.fit(X_train, y_train)
