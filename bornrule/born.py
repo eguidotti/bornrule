@@ -116,7 +116,7 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             C_ji = self._normalize(C_ji, axis=1, p=1-self.b)
 
         W_ji = self._power(C_ji, self.a)
-        if self.h != 0:
+        if self.h != 0 and len(self.classes_) > 1:
             P_ji = self._normalize(C_ji, axis=1)
             H_j = 1 + self._sum(self._multiply(P_ji, self._log(P_ji)), axis=1) / self._dense().log(P_ji.shape[1])
             W_ji = self._multiply(W_ji, self._power(H_j, self.h))
