@@ -71,14 +71,28 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             return self._weights()
 
         X = self._sanitize(X)
-        X = self._normalize(X, axis=1)
-        X = self._power(X, self.a)
-
         if sample_weight is not None:
             sample_weight = self._check_sample_weight(sample_weight, X)
-            X = self._multiply(X, sample_weight.reshape(-1, 1))
 
-        return self._multiply(self._weights(), self._sum(X, axis=0).T)
+        E_ji = 0
+        W_ji = self._weights()
+        for k in range(X.shape[0]):
+
+            X_ji = self._multiply(W_ji, self._power(X[k:k+1].T, self.a))
+            X_i = self._sum(X_ji, axis=0)
+            if self._sparse().issparse(X_ji):
+                X_i = self._multiply(X_ji != 0, X_i)
+
+            U_i = self._power(X_i, 1. / self.a)
+            Z_ji = self._power(X_i - X_ji, 1. / self.a)
+
+            D_ji = self._normalize(U_i, axis=1) - self._normalize(Z_ji, axis=1)
+            if sample_weight is not None:
+                D_ji = sample_weight[k] * D_ji
+
+            E_ji += D_ji
+
+        return E_ji / (X.shape[0] if sample_weight is None else sample_weight.sum())
 
     def _dense(self):
         return cupy if self.gpu_ else numpy
