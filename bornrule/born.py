@@ -86,7 +86,7 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             U_i = self._power(X_i, 1. / self.a)
             Y_i = self._normalize(U_i, axis=1)
 
-            if self._sparse().issparse(Y_i):
+            if self._sparse().issparse(X_j):
                 Z_j = X_j != 0
                 X_i = Z_j @ X_i
                 Y_i = Z_j @ Y_i
@@ -135,6 +135,9 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
     def _multiply(self, x, y):
         if self._sparse().issparse(x):
             return x.multiply(y).tocsr()
+
+        if self._sparse().issparse(y):
+            return y.multiply(x).tocsr()
 
         return self._dense().multiply(x, y)
 
