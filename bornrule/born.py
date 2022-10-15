@@ -76,17 +76,24 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
         E_ji = 0
         W_ji = self._weights()
+        X_ki = self._power(X, self.a) @ W_ji
         for k in range(X.shape[0]):
 
-            X_ji = self._multiply(W_ji, self._power(X[k:k+1].T, self.a))
-            X_i = self._sum(X_ji, axis=0)
-            if self._sparse().issparse(X_ji):
-                X_i = self._multiply(X_ji != 0, X_i)
+            X_j, X_i = X[k].T, X_ki[k]
+            X_ji = self._multiply(W_ji, self._power(X_j, self.a))
 
             U_i = self._power(X_i, 1. / self.a)
-            Z_ji = self._power(X_i - X_ji, 1. / self.a)
+            Y_i = self._normalize(U_i, axis=1)
 
-            D_ji = self._normalize(U_i, axis=1) - self._normalize(Z_ji, axis=1)
+            if self._sparse().issparse(X_i):
+                Z_j = X_j != 0
+                X_i = Z_j @ X_i
+                Y_i = Z_j @ Y_i
+
+            U_ji = self._power(X_i - X_ji, 1. / self.a)
+            Y_ji = self._normalize(U_ji, axis=1)
+
+            D_ji = Y_i - Y_ji
             if sample_weight is not None:
                 D_ji = sample_weight[k] * D_ji
 
