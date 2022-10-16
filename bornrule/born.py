@@ -227,16 +227,20 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             return self._weights()
 
         X = self._sanitize(X)
-        X = self._power(X, self.a)
         if sample_weight is not None:
             sample_weight = self._check_sample_weight(sample_weight, X)
 
-        E_jk = 0
         W_jk = self._weights()
-        X_nk = X @ W_jk
+        X_nj = self._power(X, self.a)
+        X_nk = X_nj @ W_jk
+
+        if self.gpu_ and self._sparse().issparse(X_nj):
+            X_nj = X_nj.tocsc()
+
+        E_jk = 0
         for n in range(X.shape[0]):
 
-            X_j, X_k = X[n:n+1].T, X_nk[n:n+1]
+            X_j, X_k = X_nj[n:n+1].T, X_nk[n:n+1]
             X_jk = self._multiply(W_jk, X_j)
 
             U_k = self._power(X_k, 1. / self.a)
