@@ -224,32 +224,32 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
         if sample_weight is not None:
             sample_weight = self._check_sample_weight(sample_weight, X)
 
-        E_ji = 0
-        W_ji = self._weights()
-        X_ki = X @ W_ji
-        for k in range(X.shape[0]):
+        E_jk = 0
+        W_jk = self._weights()
+        X_nk = X @ W_jk
+        for n in range(X.shape[0]):
 
-            X_j, X_i = X[k:k+1].T, X_ki[k:k+1]
-            X_ji = self._multiply(W_ji, X_j)
+            X_j, X_k = X[n:n+1].T, X_nk[n:n+1]
+            X_jk = self._multiply(W_jk, X_j)
 
-            U_i = self._power(X_i, 1. / self.a)
-            Y_i = self._normalize(U_i, axis=1)
+            U_k = self._power(X_k, 1. / self.a)
+            Y_k = self._normalize(U_k, axis=1)
 
             if self._sparse().issparse(X_j):
                 Z_j = X_j != 0
-                X_i = Z_j @ X_i
-                Y_i = Z_j @ Y_i
+                X_k = Z_j @ X_k
+                Y_k = Z_j @ Y_k
 
-            U_ji = self._power(X_i - X_ji, 1. / self.a)
-            Y_ji = self._normalize(U_ji, axis=1)
+            U_jk = self._power(X_k - X_jk, 1. / self.a)
+            Y_jk = self._normalize(U_jk, axis=1)
 
-            D_ji = Y_i - Y_ji
+            D_jk = Y_k - Y_jk
             if sample_weight is not None:
-                D_ji = sample_weight[k] * D_ji
+                D_jk = sample_weight[n] * D_jk
 
-            E_ji += D_ji
+            E_jk += D_jk
 
-        return E_ji if sample_weight is not None else E_ji / X.shape[0]
+        return E_jk if sample_weight is not None else E_jk / X.shape[0]
 
     def _dense(self):
         return cupy if self.gpu_ else numpy
@@ -258,19 +258,19 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
         return cupy.sparse if self.gpu_ else scipy.sparse
 
     def _weights(self):
-        C_ji = self.corpus_
+        P_jk = self.corpus_
         if self.b != 0:
-            C_ji = self._normalize(C_ji, axis=0, p=self.b)
+            P_jk = self._normalize(P_jk, axis=0, p=self.b)
         if self.b != 1:
-            C_ji = self._normalize(C_ji, axis=1, p=1-self.b)
+            P_jk = self._normalize(P_jk, axis=1, p=1-self.b)
 
-        W_ji = self._power(C_ji, self.a)
+        W_jk = self._power(P_jk, self.a)
         if self.h != 0 and len(self.classes_) > 1:
-            P_ji = self._normalize(C_ji, axis=1)
-            H_j = 1 + self._sum(self._multiply(P_ji, self._log(P_ji)), axis=1) / self._dense().log(P_ji.shape[1])
-            W_ji = self._multiply(W_ji, self._power(H_j, self.h))
+            P_jk = self._normalize(P_jk, axis=1)
+            H_j = 1 + self._sum(self._multiply(P_jk, self._log(P_jk)), axis=1) / self._dense().log(P_jk.shape[1])
+            W_jk = self._multiply(W_jk, self._power(H_j, self.h))
 
-        return W_ji
+        return W_jk
 
     def _sum(self, x, axis):
         if self._sparse().issparse(x):
