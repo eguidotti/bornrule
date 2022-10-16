@@ -1,0 +1,39 @@
+site_name: Classification with Born's Rule
+repo_url: https://github.com/eguidotti/bornrule
+
+theme:
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  name: material
+  palette:
+
+    # Palette toggle for light mode
+    - scheme: default
+      primary: blue grey
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: blue grey
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+
+markdown_extensions:
+  - markdown_katex:
+      no_inline_svg: True
+      insert_fonts_css: True
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences

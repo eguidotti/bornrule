@@ -7,6 +7,35 @@ from sklearn.exceptions import NotFittedError
 
 
 class BornClassifier(ClassifierMixin, BaseEstimator):
+    """Scikit-learn implementation of Born's Classifier
+
+    This class is compatible with the [scikit-learn](https://scikit-learn.org) ecosystem.
+    It supports both dense and sparse input and GPU-accelerated computing via [CuPy](https://cupy.dev).
+    This classifier is suitable for classification with non-negative feature vectors.
+    The data `X` are treated as unnormalized probability distributions.
+    For different data types, see [Born's Layer](/pytorch/).
+
+    Parameters
+    ----------
+    a : float
+        Amplitude. Must be strictly positive.
+    b : float
+        Balance. Must be non-negative.
+    h : float
+        Entropy. Must be non-negative.
+
+    Attributes
+    ----------
+    gpu_ : bool
+        Whether the model was fitted on GPU.
+    corpus_ : array-like of shape (n_features_in_, n_classes)
+        Fitted corpus.
+    classes_ : ndarray of shape (n_classes,)
+        Unique classes labels.
+    n_features_in_ : int
+        Number of features seen during `fit`.
+
+    """
 
     def __init__(self, a=0.5, b=1., h=1.):
         self.a = a
@@ -14,6 +43,26 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
         self.h = h
 
     def fit(self, X, y, sample_weight=None):
+        """Fit the classifier according to the training data X, y.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Training data, where `n_samples` is the number of samples
+            and `n_features` is the number of features.
+        y : array-like of shape (n_samples,) or (n_samples, n_classes)
+            Target values. If 2d array, this is the probability
+            distribution over the `n_classes` for each of the `n_samples`.
+        sample_weight : array-like of shape (n_samples,)
+            Array of weights that are assigned to individual samples.
+            If not provided, then each sample is given unit weight.
+
+        Returns
+        -------
+        self : object
+            Returns the instance itself.
+
+        """
         attrs = [
             "gpu_",
             "corpus_",
@@ -28,10 +77,39 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
         return self.partial_fit(X, y, classes=y, sample_weight=sample_weight)
 
     def partial_fit(self, X, y, classes=None, sample_weight=None):
+        """Incremental fit on a batch of samples.
+
+        This method is expected to be called several times consecutively on different chunks of a dataset so
+        as to implement out-of-core or online learning.
+
+        This is especially useful when the whole dataset is too big to fit in memory at once.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Training data, where `n_samples` is the number of samples
+            and `n_features` is the number of features.
+        y : array-like of shape (n_samples,) or (n_samples, n_classes)
+            Target values. If 2d array, this is the probability
+            distribution over the `n_classes` for each of the `n_samples`.
+        classes : array-like of shape (n_classes,)
+            List of all the classes that can possibly appear in the `y` vector.
+            Must be provided at the first call to `partial_fit`, can be omitted in subsequent calls.
+        sample_weight : array-like of shape (n_samples,)
+            Array of weights that are assigned to individual samples.
+            If not provided, then each sample is given unit weight.
+
+        Returns
+        -------
+        self : object
+            Returns the instance itself.
+
+        """
         X, y = self._sanitize(X, y)
 
         first_call = self._check_partial_fit_first_call(classes)
         if first_call:
+            self.corpus_ = 0
             self.n_features_in_ = X.shape[1]
 
         if not self._check_encoded(y):
@@ -41,18 +119,46 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             sample_weight = self._check_sample_weight(sample_weight, X)
             y = self._multiply(y, sample_weight.reshape(-1, 1))
 
-        corpus = X.T @ self._multiply(y, self._power(self._sum(X, axis=1), -1))
-        self.corpus_ = corpus if first_call else self.corpus_ + corpus
+        self.corpus_ += X.T @ self._multiply(y, self._power(self._sum(X, axis=1), -1))
 
         return self
 
     def predict(self, X):
+        """Perform classification on the test data X.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Test data, where `n_samples` is the number of samples
+            and `n_features` is the number of features.
+
+        Returns
+        -------
+        y : ndarray of shape (n_samples,)
+            Predicted target values for `X`.
+
+        """
         proba = self.predict_proba(X)
         idx = self._dense().argmax(proba, axis=1)
         
         return self.classes_[idx]
 
     def predict_proba(self, X):
+        """Return probability estimates for the test data X.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Test data, where `n_samples` is the number of samples
+            and `n_features` is the number of features.
+
+        Returns
+        -------
+        y : ndarray of shape (n_samples, n_classes)
+            Returns the probability of the samples for each class in the model.
+            The columns correspond to the classes in sorted order, as they appear in the attribute `classes_`.
+
+        """
         self._check_fitted()
 
         X = self._sanitize(X)
@@ -60,11 +166,54 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
         y = self._normalize(u, axis=1)
 
         if self._sparse().issparse(y):
-            y = self._dense().asarray(y.todense())
+            y = y.todense()
 
-        return y
+        return self._dense().asarray(y)
 
     def explain(self, X=None, sample_weight=None):
+        r"""Global and local explanation
+
+        For each test vector $`x`$, the $`a`$-th power of the unnormalized probabilities $`u`$ is
+        given by the matrix product:
+
+        ```math
+        u^a = Wx^a
+        ```
+        where $`W`$ is a matrix of non-negative weights that generally depends on the model's
+        hyper-parameters ($`a`$, $`b`$, $`h`$). The classification probabilities are obtained by
+        normalizing $`u`$ such that it sums up to $`1`$.
+
+        This method returns global or local feature importance weights, depending on `X`:
+
+        - When `X` is not provided, this method returns the global weights $`W`$.
+
+        - When `X` is a single sample of shape `(1, n_features)`,
+        this method returns a matrix of entries $`(j,k)`$ where each entry is the contribution of the
+        $`j`$-th feature to the probability of the $`k`$-th class for the given sample.
+        For instance, a value of $`0.01`$ means that the feature increases the probability by $`1\%`$.
+        Equivalently, dropping the feature would lead to a $`1\%`$ decrease of the probability.
+
+        - When `X` is of shape `(n_samples, n_features)`,
+        then the values above are computed for each sample and this method returns their weighted sum.
+        By default, each sample is assigned a weight of `1/n_samples` so that the average is returned.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Test data, where `n_samples` is the number of samples
+            and `n_features` is the number of features. If not provided,
+            then global weights are returned.
+        sample_weight : array-like of shape (n_samples,)
+            Array of weights that are assigned to individual samples.
+            If not provided, then each sample is given weight `1/n_samples`.
+
+        Returns
+        -------
+        E : array-like of shape (n_features, n_classes)
+            Returns the feature importance for each class in the model.
+            The columns correspond to the classes in sorted order, as they appear in the attribute `classes_`.
+
+        """
         self._check_fitted()
 
         if X is None:

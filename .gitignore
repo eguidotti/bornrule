@@ -134,3 +134,6 @@ dmypy.json
 data
 poetry.lock
 results*
+node_modules
+package.json
+package-lock.json
