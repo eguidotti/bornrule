@@ -283,10 +283,7 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
         if self._sparse().issparse(x):
             return x.sum(axis=axis)
 
-        if isinstance(x, self._dense().matrix):
-            return x.sum(axis=axis)
-
-        return x.sum(axis=axis, keepdims=True)
+        return self._dense().asarray(x).sum(axis=axis, keepdims=True)
 
     def _multiply(self, x, y):
         if self._sparse().issparse(x):
