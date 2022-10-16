@@ -5,6 +5,13 @@ from sklearn.utils.validation import _check_sample_weight
 from sklearn.utils.multiclass import unique_labels
 from sklearn.exceptions import NotFittedError
 
+try:
+    import cupy
+    gpu_support = True
+
+except ModuleNotFoundError:
+    gpu_support = False
+
 
 class BornClassifier(ClassifierMixin, BaseEstimator):
     """Scikit-learn implementation of Born's Classifier
@@ -420,27 +427,22 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
         return False
 
     def _check_gpu(self, X, y=None):
-        try:
-            import cupy
+        if not gpu_support:
+            return False
 
-            cp_X = cupy.get_array_module(X).__name__ == "cupy"
-            if y is None:
-                return cp_X
+        cp_X = cupy.get_array_module(X).__name__ == "cupy"
+        if y is None:
+            return cp_X
 
-            cp_y = cupy.get_array_module(y).__name__ == "cupy"
-            if cp_X and cp_y:
-                return True
+        cp_y = cupy.get_array_module(y).__name__ == "cupy"
+        if cp_X == cp_y:
+            return cp_X
 
-            elif cp_X and not cp_y:
-                raise ValueError("X is on GPU, but y is not.")
+        elif cp_X and not cp_y:
+            raise ValueError("X is on GPU, but y is not.")
 
-            elif not cp_X and cp_y:
-                raise ValueError("y is on GPU, but X is not.")
-
-        except ModuleNotFoundError:
-            pass
-
-        return False
+        elif not cp_X and cp_y:
+            raise ValueError("y is on GPU, but X is not.")
 
     def _check_fitted(self):
         if getattr(self, "corpus_", None) is None:
