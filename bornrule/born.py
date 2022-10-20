@@ -271,9 +271,9 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
     def _weights(self):
         P_jk = self.corpus_
         if self.b != 0:
-            P_jk = self._normalize(P_jk, axis=0, p=self.b)
+            P_jk = self._multiply(P_jk, self._power(self._sum(self.corpus_, axis=0), -self.b))
         if self.b != 1:
-            P_jk = self._normalize(P_jk, axis=1, p=1-self.b)
+            P_jk = self._multiply(P_jk, self._power(self._sum(self.corpus_, axis=1), self.b-1))
 
         W_jk = self._power(P_jk, self.a)
         if self.h != 0 and len(self.classes_) > 1:
