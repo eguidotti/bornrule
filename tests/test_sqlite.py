@@ -39,13 +39,14 @@ B_train = bow(X_train, names=vectorizer.get_feature_names_out())
 
 
 @pytest.mark.parametrize(
-    "params", [
-        {"a": 0.5, "b": 1.0, "h": 1.0},
-        {"a": 0.7, "b": 0.3, "h": 0.4}
+    "params, engine", [
+        ({"a": 0.5, "b": 1.0, "h": 1.0}, "sqlite:///"),
+        ({"a": 0.7, "b": 0.3, "h": 0.4}, "sqlite:///"),
+        ({"a": 0.7, "b": 0.3, "h": 0.4}, "sqlite:///test.db")
     ])
-def test_predict(params):
+def test_sqlite(params, engine):
     skl = BornClassifier()
-    sql = BornClassifierSQL()
+    sql = BornClassifierSQL(engine=engine)
 
     # Parameters
     skl.set_params(**params)
@@ -82,7 +83,7 @@ def test_predict(params):
     sql.deploy()
 
     # Classes and vocabulary
-    classes, features = skl.classes_, vectorizer.get_feature_names_out()
+    classes, features = skl.classes_, vectorizer.get_feature_names()
 
     # Check global explanation
     ex1 = sql.explain()
