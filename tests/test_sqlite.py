@@ -34,8 +34,8 @@ X_test = vectorizer.transform(test.data)
 y_test = np.array([test.target_names[t] for t in test.target])
 
 # Transform to bow
-B_test = bow(X_test, names=vectorizer.get_feature_names_out())
-B_train = bow(X_train, names=vectorizer.get_feature_names_out())
+B_test = bow(X_test, names=vectorizer.get_feature_names())
+B_train = bow(X_train, names=vectorizer.get_feature_names())
 
 
 @pytest.mark.parametrize(
