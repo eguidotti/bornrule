@@ -33,9 +33,15 @@ y_train = np.array([train.target_names[t] for t in train.target])
 X_test = vectorizer.transform(test.data)
 y_test = np.array([test.target_names[t] for t in test.target])
 
+# Feature names
+if hasattr(vectorizer, 'get_feature_names_out'):
+    feature_names = vectorizer.get_feature_names_out()
+else:
+    feature_names = vectorizer.get_feature_names()
+
 # Transform to bow
-B_test = bow(X_test, names=vectorizer.get_feature_names())
-B_train = bow(X_train, names=vectorizer.get_feature_names())
+B_test = bow(X_test, names=feature_names)
+B_train = bow(X_train, names=feature_names)
 
 
 @pytest.mark.parametrize(
@@ -82,13 +88,10 @@ def test_sqlite(params, engine):
     # Deploy to speed up
     sql.deploy()
 
-    # Classes and vocabulary
-    classes, features = skl.classes_, vectorizer.get_feature_names()
-
     # Check global explanation
     ex1 = sql.explain()
     ex2 = skl.explain()
-    ex2 = pd.DataFrame.sparse.from_spmatrix(ex2, index=features, columns=classes)
+    ex2 = pd.DataFrame.sparse.from_spmatrix(ex2, index=feature_names, columns=skl.classes_)
     assert np.allclose(ex1, ex2.loc[ex1.index][ex1.columns]), \
         f"Global explanation does not match"
 
@@ -96,14 +99,14 @@ def test_sqlite(params, engine):
     for i in range(100):
         ex1 = sql.explain(B_test[i:i+1])
         ex2 = skl.explain(X_test[i:i+1])
-        ex2 = pd.DataFrame.sparse.from_spmatrix(ex2, index=features, columns=classes)
+        ex2 = pd.DataFrame.sparse.from_spmatrix(ex2, index=feature_names, columns=skl.classes_)
         assert np.allclose(ex1, ex2.loc[ex1.index][ex1.columns]), \
             f"Local explanation does not match for item {i}"
 
     # Check multiple explanations
     ex1 = sql.explain(B_test[0:100])
     ex2 = skl.explain(X_test[0:100])
-    ex2 = pd.DataFrame.sparse.from_spmatrix(ex2, index=features, columns=classes)
+    ex2 = pd.DataFrame.sparse.from_spmatrix(ex2, index=feature_names, columns=skl.classes_)
     assert np.allclose(ex1, ex2.loc[ex1.index][ex1.columns]), \
         f"Multiple-items explanation does not match"
 
@@ -111,6 +114,6 @@ def test_sqlite(params, engine):
     sample_weight = list(range(100))
     ex1 = sql.explain(B_test[0:100], sample_weight=sample_weight)
     ex2 = skl.explain(X_test[0:100], sample_weight=sample_weight)
-    ex2 = pd.DataFrame.sparse.from_spmatrix(ex2, index=features, columns=classes)
+    ex2 = pd.DataFrame.sparse.from_spmatrix(ex2, index=feature_names, columns=skl.classes_)
     assert np.allclose(ex1, ex2.loc[ex1.index][ex1.columns]), \
         f"Explanation with sample_weight does not match"
