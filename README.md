@@ -36,7 +36,7 @@ from bornrule.sql import BornClassifierSQL
 ```
 
 - Use for in-database classification
-- Supports inputs represented as json `{key: value, ...}`
+- Supports inputs represented as json `{feature: value, ...}`
 
 ## Paper replication
 
