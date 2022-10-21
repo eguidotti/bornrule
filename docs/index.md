@@ -26,6 +26,14 @@ from bornrule.torch import Born
 
 - See [Born's Layer](/pytorch/)
 
+### SQL
+
+```py
+from bornrule.sql import BornClassifierSQL
+```
+
+- See [Born's Classifier SQL](/sql/)
+
 ## Cite as
 
 TODO

@@ -89,8 +89,6 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
         This method is expected to be called several times consecutively on different chunks of a dataset so
         as to implement out-of-core or online learning.
 
-        This is especially useful when the whole dataset is too big to fit in memory at once.
-
         Parameters
         ----------
         X : array-like of shape (n_samples, n_features)
@@ -142,7 +140,7 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
         Returns
         -------
         y : ndarray of shape (n_samples,)
-            Predicted target values for `X`.
+            Predicted target classes for `X`.
 
         """
         proba = self.predict_proba(X)
@@ -410,7 +408,7 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
     def _check_partial_fit_first_call(self, classes):
         if getattr(self, "classes_", None) is None and classes is None:
-            raise ValueError("classes must be passed on the first call to partial_fit.")
+            raise ValueError("classes must be passed on the first call to partial_fit")
 
         elif classes is not None:
             classes = self._unique_labels(classes)
@@ -440,16 +438,16 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             return cp_X
 
         elif cp_X and not cp_y:
-            raise ValueError("X is on GPU, but y is not.")
+            raise ValueError("X is on GPU, but y is not")
 
         elif not cp_X and cp_y:
-            raise ValueError("y is on GPU, but X is not.")
+            raise ValueError("y is on GPU, but X is not")
 
     def _check_fitted(self):
         if getattr(self, "corpus_", None) is None:
             raise NotFittedError(
                 f"This {self.__class__.__name__} instance is not fitted yet. "
-                "Call 'fit' with appropriate arguments before using this estimator.")
+                "Call 'fit' with appropriate arguments before using this estimator")
 
     def _more_tags(self):
         return {

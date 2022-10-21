@@ -2,8 +2,8 @@ site_name: Classification with Born's Rule
 repo_url: https://github.com/eguidotti/bornrule
 
 theme:
-  logo: assets/logo.svg
-  favicon: assets/favicon.svg
+  logo: img/logo.svg
+  favicon: img/favicon.svg
   name: material
   palette:
 
