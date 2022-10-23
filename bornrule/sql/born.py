@@ -1,6 +1,4 @@
-import numpy as np
 import pandas as pd
-import sqlalchemy.engine
 
 try:
     from sqlalchemy import create_engine, String, Integer
@@ -82,7 +80,7 @@ class BornClassifierSQL:
 
         """
         with self.db.connect() as con:
-            return self.db.read_params(con).to_dict(orient='records')[0]
+            return self.db.read_params(con)
 
     def set_params(self, a, b, h):
         """Set parameters.
@@ -226,11 +224,11 @@ class BornClassifierSQL:
     def explain(self, X=None, sample_weight=None):
         r"""Global and local explanation
 
-        For each test vector $`x`$, the $`a`$-th power of the unnormalized probabilities $`u`$ is
+        For each test vector $`x`$, the $`a`$-th power of the unnormalized probability for the $`k`$-th class is
         given by the matrix product:
 
         ```math
-        u^a = Wx^a
+        u_k^a = \sum_j W_{jk}x_j^a
         ```
         where $`W`$ is a matrix of non-negative weights that generally depends on the model's
         hyper-parameters ($`a`$, $`b`$, $`h`$). The classification probabilities are obtained by
@@ -241,14 +239,11 @@ class BornClassifierSQL:
         - When `X` is not provided, this method returns the global weights $`W`$.
 
         - When `X` is a single sample,
-        this method returns a matrix of entries $`(j,k)`$ where each entry is the contribution of the
-        $`j`$-th feature to the probability of the $`k`$-th class for the given sample.
-        For instance, a value of $`0.01`$ means that the feature increases the probability by $`1\%`$.
-        Equivalently, dropping the feature would lead to a $`1\%`$ decrease of the probability.
+        this method returns a matrix of entries $`(j,k)`$ where each entry is given by $`W_{jk}x_j^a`$.
 
         - When `X` contains multiple samples,
         then the values above are computed for each sample and this method returns their weighted sum.
-        By default, each sample is assigned a weight of `1/n_samples` so that the average is returned.
+        By default, each sample is given unit weight.
 
         Parameters
         ----------
@@ -257,7 +252,7 @@ class BornClassifierSQL:
             If not provided, then global weights are returned.
         sample_weight : list-like of length n_samples
             List of weights that are assigned to individual samples.
-            If not provided, then each sample is given weight `1/n_samples`.
+            If not provided, then each sample is given unit weight.
 
         Returns
         -------
@@ -269,10 +264,6 @@ class BornClassifierSQL:
 
         if X is not None:
             self._validate(X=X, sample_weight=sample_weight)
-
-            if sample_weight is None:
-                if len(X) > 1:
-                    sample_weight = [1. / len(X)] * len(X)
 
         with self.db.connect() as con:
             W = self.db.explain(con, X=X, sample_weight=sample_weight)

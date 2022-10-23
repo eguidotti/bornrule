@@ -56,19 +56,13 @@ def test_explain_single(classifier, item):
     X = X_test[item]
     E = classifier.explain(X)
 
-    # For each feature
-    for i in X.tocoo().col:
+    # Compute probabilities from explanation
+    a = classifier.get_params()['a']
+    u = np.power(E.sum(axis=0), 1/a)
+    y = u / u.sum()
 
-        # X with and without feature i
-        X1, X2 = X.copy(), X.copy()
-        X2[0, i] = 0
-
-        # Compute probabilities with and without feature i
-        P1 = classifier.predict_proba(X1)
-        P2 = classifier.predict_proba(X2)
-
-        # Check that explanation weights match the difference in classification probabilities
-        assert np.allclose(P1 - P2, E[i].todense()), f"Explanation does not match for feature {i}"
+    # Check agreement with predict_proba
+    assert np.allclose(y, classifier.predict_proba(X)), "Explanation does not match"
 
 
 @pytest.mark.parametrize(
@@ -81,23 +75,13 @@ def test_explain_multiple(classifier, nitems):
     classifier.fit(X_train, y_train)
 
     # Explain multiple items
-    X_test_1 = X_test[0:nitems]
-    E = classifier.explain(X_test_1)
+    E1 = classifier.explain(X_test[0:nitems])
 
-    # Drop one feature
-    X_test_2 = X_test_1.copy()
-    feature = Counter(X_test_2.tocoo().col).most_common(1)[0][0]
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
-        X_test_2[:, feature] = 0
+    # Sum weights of single-item explanation
+    E2 = sum([classifier.explain(X_test[i]) for i in range(0, nitems)])
 
-    # Compute probabilities with and without the feature
-    P1 = classifier.predict_proba(X_test_1)
-    P2 = classifier.predict_proba(X_test_2)
-
-    # Check that explanation weights match the average difference in classification probabilities
-    Ef = (P1 - P2).sum(axis=0) / X_test_1.shape[0]
-    assert np.allclose(Ef, E[feature].todense()), f"Explanation does not match"
+    # Check explanations
+    assert np.allclose(E1.todense(), E2.todense()), f"Explanation does not match"
 
 
 @pytest.mark.parametrize(
@@ -108,27 +92,16 @@ def test_explain_multiple(classifier, nitems):
     ])
 def test_explain_weights(classifier, nitems):
     classifier.fit(X_train, y_train)
+    sample_weight = range(0, nitems)
 
-    # Explain multiple items using weights
-    X_test_1 = X_test[0:nitems]
-    weights = np.array(range(nitems))
-    E = classifier.explain(X_test_1, sample_weight=weights)
+    # Explain multiple items with sample_weight
+    E1 = classifier.explain(X_test[0:nitems], sample_weight=sample_weight)
 
-    # Drop one feature
-    X_test_2 = X_test_1.copy()
-    feature = Counter(X_test_2.tocoo().col).most_common(1)[0][0]
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
-        X_test_2[:, feature] = 0
+    # Sum weights of single-item explanation
+    E2 = sum([sample_weight[i] * classifier.explain(X_test[i]) for i in range(0, nitems)])
 
-    # Compute probabilities with and without the feature
-    P1 = classifier.predict_proba(X_test_1)
-    P2 = classifier.predict_proba(X_test_2)
-
-    # Check that explanation weights match the weighted sum of differences in classification probabilities
-    Ef = ((P1 - P2) * weights.reshape((-1, 1))).sum(axis=0)
-    assert np.allclose(Ef, E[feature].todense()), f"Explanation does not match"
-
+    # Check explanations
+    assert np.allclose(E1.todense(), E2.todense()), f"Explanation does not match"
 
 @pytest.mark.parametrize(
     "classifier", [
@@ -148,7 +121,7 @@ def test_sparse(classifier):
     assert np.allclose(classifier.predict_proba(Xn_train), classifier.predict_proba(dense(Xn_train))), \
         "predict_proba does not match"
 
-    assert np.allclose(dense(classifier.explain(Xn_test)), classifier.explain(dense(Xn_test))), \
+    assert np.allclose(dense(classifier.explain(Xn_test)), dense(classifier.explain(dense(Xn_test)))), \
         "explain does not match"
 
     # Fit dense

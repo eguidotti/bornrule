@@ -178,11 +178,11 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
     def explain(self, X=None, sample_weight=None):
         r"""Global and local explanation
 
-        For each test vector $`x`$, the $`a`$-th power of the unnormalized probabilities $`u`$ is
+        For each test vector $`x`$, the $`a`$-th power of the unnormalized probability for the $`k`$-th class is
         given by the matrix product:
 
         ```math
-        u^a = Wx^a
+        u_k^a = \sum_j W_{jk}x_j^a
         ```
         where $`W`$ is a matrix of non-negative weights that generally depends on the model's
         hyper-parameters ($`a`$, $`b`$, $`h`$). The classification probabilities are obtained by
@@ -192,15 +192,12 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
         - When `X` is not provided, this method returns the global weights $`W`$.
 
-        - When `X` is a single sample of shape `(1, n_features)`,
-        this method returns a matrix of entries $`(j,k)`$ where each entry is the contribution of the
-        $`j`$-th feature to the probability of the $`k`$-th class for the given sample.
-        For instance, a value of $`0.01`$ means that the feature increases the probability by $`1\%`$.
-        Equivalently, dropping the feature would lead to a $`1\%`$ decrease of the probability.
+        - When `X` is a single sample,
+        this method returns a matrix of entries $`(j,k)`$ where each entry is given by $`W_{jk}x_j^a`$.
 
-        - When `X` is of shape `(n_samples, n_features)`,
+        - When `X` contains multiple samples,
         then the values above are computed for each sample and this method returns their weighted sum.
-        By default, each sample is assigned a weight of `1/n_samples` so that the average is returned.
+        By default, each sample is given unit weight.
 
         Parameters
         ----------
@@ -210,7 +207,7 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             then global weights are returned.
         sample_weight : array-like of shape (n_samples,)
             Array of weights that are assigned to individual samples.
-            If not provided, then each sample is given weight `1/n_samples`.
+            If not provided, then each sample is given unit weight.
 
         Returns
         -------
@@ -225,40 +222,50 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             return self._weights()
 
         X = self._sanitize(X)
+        X = self._normalize(X, axis=1)
+        X = self._power(X, self.a)
+
         if sample_weight is not None:
             sample_weight = self._check_sample_weight(sample_weight, X)
+            X = self._multiply(X, sample_weight.reshape(-1, 1))
 
-        W_jk = self._weights()
-        X_nj = self._power(X, self.a)
-        X_nk = X_nj @ W_jk
+        return self._multiply(self._weights(), self._sum(X, axis=0).T)
 
-        if self.gpu_ and self._sparse().issparse(X_nj):
-            X_nj = X_nj.tocsc()
-
-        E_jk = 0
-        for n in range(X.shape[0]):
-
-            X_j, X_k = X_nj[n:n+1].T, X_nk[n:n+1]
-            X_jk = self._multiply(W_jk, X_j)
-
-            U_k = self._power(X_k, 1. / self.a)
-            Y_k = self._normalize(U_k, axis=1)
-
-            if self._sparse().issparse(X_j):
-                Z_j = X_j != 0
-                X_k = Z_j @ X_k
-                Y_k = Z_j @ Y_k
-
-            U_jk = self._power(X_k - X_jk, 1. / self.a)
-            Y_jk = self._normalize(U_jk, axis=1)
-
-            D_jk = Y_k - Y_jk
-            if sample_weight is not None:
-                D_jk = sample_weight[n] * D_jk
-
-            E_jk += D_jk
-
-        return E_jk if sample_weight is not None else E_jk / X.shape[0]
+        # X = self._sanitize(X)
+        # if sample_weight is not None:
+        #     sample_weight = self._check_sample_weight(sample_weight, X)
+        #
+        # W_jk = self._weights()
+        # X_nj = self._power(X, self.a)
+        # X_nk = X_nj @ W_jk
+        #
+        # if self.gpu_ and self._sparse().issparse(X_nj):
+        #     X_nj = X_nj.tocsc()
+        #
+        # E_jk = 0
+        # for n in range(X.shape[0]):
+        #
+        #     X_j, X_k = X_nj[n:n+1].T, X_nk[n:n+1]
+        #     X_jk = self._multiply(W_jk, X_j)
+        #
+        #     U_k = self._power(X_k, 1. / self.a)
+        #     Y_k = self._normalize(U_k, axis=1)
+        #
+        #     if self._sparse().issparse(X_j):
+        #         Z_j = X_j != 0
+        #         X_k = Z_j @ X_k
+        #         Y_k = Z_j @ Y_k
+        #
+        #     U_jk = self._power(X_k - X_jk, 1. / self.a)
+        #     Y_jk = self._normalize(U_jk, axis=1)
+        #
+        #     D_jk = Y_k - Y_jk
+        #     if sample_weight is not None:
+        #         D_jk = sample_weight[n] * D_jk
+        #
+        #     E_jk += D_jk
+        #
+        # return E_jk if sample_weight is not None else E_jk / X.shape[0]
 
     def _dense(self):
         return cupy if self.gpu_ else numpy

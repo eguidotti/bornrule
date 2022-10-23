@@ -137,7 +137,11 @@ class Database:
         return con.execute(text(sql), values)
 
     def read_params(self, con):
-        return pd.read_sql(f"SELECT a, b, h FROM {self.table_params}", con)
+        params = con.execute(f"SELECT a, b, h FROM {self.table_params}")
+        values = params.fetchone()
+        keys = params.keys()
+
+        return dict(zip(keys, values))
 
     def write_params(self, con, a, b, h):
         if_exists = {
@@ -270,12 +274,16 @@ class Database:
             sql = self._sql_explain()
 
         else:
-            weights = None
-            if sample_weight is not None:
-                weights = self.write_sample_weight(con, sample_weight)
+            norm = [sum(v for k, v in x.items()) for x in X]
+
+            if sample_weight is None:
+                X = [{k: v / n for k, v in x.items()} for x, n in zip(X, norm) if n > 0]
+            else:
+                p = 1. / self.read_params(con)['a']
+                X = [{k: pow(w, p) * v / n for k, v in x.items()} for x, n, w in zip(X, norm, sample_weight) if n > 0]
 
             items = self.write_items(con, X)
-            sql = self._sql_explain(items, weights)
+            sql = self._sql_explain(items)
 
         return pd.read_sql(sql, con)
 
@@ -317,37 +325,51 @@ class Database:
                 Y_nk
             """
 
-    def _sql_explain(self, items=None, weights=None):
+    def _sql_explain(self, items=None):
         if items is None:
             return f"{self._sql_WITH()} SELECT * FROM HW_jk"
 
         return f"""
             {self._sql_WITH()}, 
-                X_njk AS ({self._sql_X_njk(items)}), 
-                X_nk AS ({self._sql_X_nk()}), 
-                U_nk AS ({self._sql_U_nk()}), 
-                U_n AS ({self._sql_U_n()}), 
-                Y_nk AS ({self._sql_Y_nk()}), 
-                U_njk AS ({self._sql_U_njk(items)}), 
-                U_nj AS ({self._sql_U_nj()}), 
-                Y_njk AS ({self._sql_Y_njk()}) 
+                X_njk AS ({self._sql_X_njk(items)})
             SELECT 
-                Y_njk.{self.j}, 
-                Y_njk.{self.k}, 
-                {self.SUM}(
-                    (Y_nk.{self.w} - Y_njk.{self.w})
-                    {'' if weights is None else f' * {weights}.{self.w}'}
-                ) AS {self.w}
+                {self.j},
+                {self.k},
+                {self.SUM}({self.w}) AS {self.w}
             FROM 
-                Y_njk, Y_nk {'' if weights is None else f', {weights}'}
-            WHERE 
-                Y_njk.{self.n} = Y_nk.{self.n} AND
-                Y_njk.{self.k} = Y_nk.{self.k} 
-                {'' if weights is None else f'AND Y_nk.{self.n} = {weights}.{self.n}'}
+                X_njk
             GROUP BY
-                Y_njk.{self.j}, 
-                Y_njk.{self.k}
+                {self.j},
+                {self.k}
             """
+
+        # return f"""
+        #     {self._sql_WITH()},
+        #         X_njk AS ({self._sql_X_njk(items)}),
+        #         X_nk AS ({self._sql_X_nk()}),
+        #         U_nk AS ({self._sql_U_nk()}),
+        #         U_n AS ({self._sql_U_n()}),
+        #         Y_nk AS ({self._sql_Y_nk()}),
+        #         U_njk AS ({self._sql_U_njk(items)}),
+        #         U_nj AS ({self._sql_U_nj()}),
+        #         Y_njk AS ({self._sql_Y_njk()})
+        #     SELECT
+        #         Y_njk.{self.j},
+        #         Y_njk.{self.k},
+        #         {self.SUM}(
+        #             (Y_nk.{self.w} - Y_njk.{self.w})
+        #             {'' if weights is None else f' * {weights}.{self.w}'}
+        #         ) AS {self.w}
+        #     FROM
+        #         Y_njk, Y_nk {'' if weights is None else f', {weights}'}
+        #     WHERE
+        #         Y_njk.{self.n} = Y_nk.{self.n} AND
+        #         Y_njk.{self.k} = Y_nk.{self.k}
+        #         {'' if weights is None else f'AND Y_nk.{self.n} = {weights}.{self.n}'}
+        #     GROUP BY
+        #         Y_njk.{self.j},
+        #         Y_njk.{self.k}
+        #     """
 
     def _sql_WITH(self):
         if self.exists(self.table_weights):
