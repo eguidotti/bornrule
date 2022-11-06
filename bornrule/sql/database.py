@@ -218,15 +218,10 @@ class Database:
             )
 
         sql = f"""
+            INSERT INTO  {self.table_weights} 
             {self._sql_WITH()} 
-            INSERT INTO  
-                {self.table_weights} 
-            SELECT 
-                {self.j},
-                {self.k},
-                {self.w}
-            FROM 
-                HW_jk
+            SELECT {self.j}, {self.k}, {self.w} 
+            FROM HW_jk
             """
 
         self.write(con, table=self.table_weights)
