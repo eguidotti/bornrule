@@ -25,7 +25,7 @@ from bornrule import BornClassifier
 ```
 
 - Use it as any other `sklearn` classifier
-- Supports `scipy` sparse matrices, and `cupy` arrays for GPU-accelerated computing
+- Supports both dense and sparse input and GPU-accelerated computing via `cupy`
 - Documentation available [here](https://eguidotti.github.io/bornrule/sklearn/)
 
 ### PyTorch
