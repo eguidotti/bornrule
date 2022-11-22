@@ -12,15 +12,13 @@
 
 ## Installation
 
-Install with:
-
 ```bash
 pip install bornrule
 ```
 
 ## Usage
 
-### Scikit-Learn
+### Scikit-Learn [[Documentation](https://eguidotti.github.io/bornrule/sklearn/)]
 
 ```py
 from bornrule import BornClassifier
@@ -30,7 +28,7 @@ from bornrule import BornClassifier
 - Supports `scipy` sparse matrices 
 - Supports `cupy` arrays and sparse matrices for GPU-accelerated computing
 
-### PyTorch
+### PyTorch [[Documentation](https://eguidotti.github.io/bornrule/pytorch/)]
 
 ```py
 from bornrule.torch import Born
@@ -39,7 +37,7 @@ from bornrule.torch import Born
 - Supports real and complex-valued inputs
 - Output: probabilities in the range [0, 1]
 
-### SQL
+### SQL [[Documentation](https://eguidotti.github.io/bornrule/sql/)]
 
 ```py
 from bornrule.sql import BornClassifierSQL
