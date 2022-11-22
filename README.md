@@ -5,7 +5,9 @@ This repository implements the classifier proposed in:
 > Emanuele Guidotti and Alfio Ferrara. Text Classification with Born’s Rule. *Advances in Neural Information Processing Systems*, 2022.
 
 <div align="center">
-[Paper](https://openreview.net/pdf?id=sNcn-E3uPHA) - [Slides](https://nips.cc/media/neurips-2022/Slides/54723.pdf) - [Poster](https://nips.cc/media/PosterPDFs/NeurIPS%202022/8d7628dd7a710c8638dbd22d4421ee46.png)
+  [<a href="https://openreview.net/pdf?id=sNcn-E3uPHA">Paper</a>] - 
+  [<a href="https://nips.cc/media/neurips-2022/Slides/54723.pdf">Slides</a>] - 
+  [<a href="https://nips.cc/media/PosterPDFs/NeurIPS%202022/8d7628dd7a710c8638dbd22d4421ee46.png">Poster</a>]
 </div>
 
 ## Installation
