@@ -4,9 +4,8 @@ version = "0.1.0"
 license = "GPL-3.0-or-later"
 description = "Classification with Born's rule"
 authors = ["Emanuele Guidotti <emanuele.guidotti@unine.ch>"]
-readme = "README.md"
+readme = "README.min.md"
 repository = "https://github.com/eguidotti/bornrule"
-homepage = "https://eguidotti.github.io/bornrule/"
 documentation = "https://eguidotti.github.io/bornrule/"
 
 [tool.poetry.dependencies]
