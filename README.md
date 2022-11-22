@@ -1,11 +1,19 @@
-# Supervised Classification with Born's Rule
+# Classification with Born's Rule
+
+This repository implements the classifier proposed in:
+
+> Emanuele Guidotti and Alfio Ferrara. Text Classification with Born’s Rule. *Advances in Neural Information Processing Systems*, 2022.
+
+<div align="center">
+[Paper](https://openreview.net/pdf?id=sNcn-E3uPHA) - [Slides](https://nips.cc/media/neurips-2022/Slides/54723.pdf) - [Poster](https://nips.cc/media/PosterPDFs/NeurIPS%202022/8d7628dd7a710c8638dbd22d4421ee46.png)
+</div>
 
 ## Installation
 
 Install with:
 
 ```bash
-pip install .
+pip install bornrule
 ```
 
 ## Usage
@@ -16,7 +24,7 @@ pip install .
 from bornrule import BornClassifier
 ```
 
-- Use it like any other `sklearn` classifier
+- Use it as any other `sklearn` classifier
 - Supports `scipy` sparse matrices 
 - Supports `cupy` arrays and sparse matrices for GPU-accelerated computing
 
@@ -25,7 +33,7 @@ from bornrule import BornClassifier
 ```py
 from bornrule.torch import Born
 ```
-- Use it like any other `torch` layer
+- Use it as any other `torch` layer
 - Supports real and complex-valued inputs
 - Output: probabilities in the range [0, 1]
 
@@ -35,7 +43,7 @@ from bornrule.torch import Born
 from bornrule.sql import BornClassifierSQL
 ```
 
-- Use for in-database classification
+- Use it for in-database classification
 - Supports inputs represented as json `{feature: value, ...}`
 
 ## Paper replication
@@ -43,10 +51,10 @@ from bornrule.sql import BornClassifierSQL
 All the results in the paper are obtained using Python 3.9 on a Google Cloud Virtual Machine equipped with 
 CentOS 7, 12 vCPU Intel Cascade Lake 85 GB RAM, 1 GPU NVIDIA Tesla A100, and CUDA 11.5.
 
-Install this project:
+Install this package:
 
 ```commandline
-pip install .
+pip install bornrule==0.1.0
 ```
 
 Install additional dependencies to replicate the paper:
@@ -72,4 +80,19 @@ python -u nips.py > nips.log &
 ```
 
 The script generates a folder named `results` with all the results in the paper. Additional information are saved to the log file `nips.log`
+
+## Cite as
+
+Please cite the following when using this software:
+
+```bibtex
+@inproceedings{guidotti2022text,
+  title={Text Classification with Born's Rule},
+  author={Emanuele Guidotti and Alfio Ferrara},
+  booktitle={Advances in Neural Information Processing Systems},
+  editor={Alice H. Oh and Alekh Agarwal and Danielle Belgrave and Kyunghyun Cho},
+  year={2022},
+  url={https://openreview.net/forum?id=sNcn-E3uPHA}
+}
+```
 

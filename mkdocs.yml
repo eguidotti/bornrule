@@ -1,4 +1,5 @@
 site_name: Classification with Born's Rule
+site_url: https://eguidotti.github.io/bornrule/
 repo_url: https://github.com/eguidotti/bornrule
 
 theme:
@@ -6,15 +7,11 @@ theme:
   favicon: img/favicon.svg
   name: material
   palette:
-
-    # Palette toggle for light mode
     - scheme: default
       primary: blue grey
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
-
-    # Palette toggle for dark mode
     - scheme: slate
       primary: blue grey
       toggle:
@@ -29,11 +26,14 @@ plugins:
             docstring_style: numpy
 
 markdown_extensions:
-  - markdown_katex:
-      no_inline_svg: True
-      insert_fonts_css: True
-  - pymdownx.highlight:
-      anchor_linenums: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - markdown_katex:
+      no_inline_svg: True
+      insert_fonts_css: True
