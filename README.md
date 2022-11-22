@@ -18,26 +18,26 @@ pip install bornrule
 
 ## Usage
 
-### Scikit-Learn [[Documentation](https://eguidotti.github.io/bornrule/sklearn/)]
+### Scikit-Learn
 
 ```py
 from bornrule import BornClassifier
 ```
 
 - Use it as any other `sklearn` classifier
-- Supports `scipy` sparse matrices 
-- Supports `cupy` arrays and sparse matrices for GPU-accelerated computing
+- Supports `scipy` sparse matrices, and `cupy` arrays for GPU-accelerated computing
+- Documentation available [here](https://eguidotti.github.io/bornrule/sklearn/)
 
-### PyTorch [[Documentation](https://eguidotti.github.io/bornrule/pytorch/)]
+### PyTorch
 
 ```py
 from bornrule.torch import Born
 ```
 - Use it as any other `torch` layer
-- Supports real and complex-valued inputs
-- Output: probabilities in the range [0, 1]
+- Supports real and complex-valued inputs. Outputs probabilities in the range [0, 1]
+- Documentation available [here](https://eguidotti.github.io/bornrule/pytorch/)
 
-### SQL [[Documentation](https://eguidotti.github.io/bornrule/sql/)]
+### SQL
 
 ```py
 from bornrule.sql import BornClassifierSQL
@@ -45,6 +45,7 @@ from bornrule.sql import BornClassifierSQL
 
 - Use it for in-database classification
 - Supports inputs represented as json `{feature: value, ...}`
+- Documentation available [here](https://eguidotti.github.io/bornrule/sql/)
 
 ## Paper replication
 
