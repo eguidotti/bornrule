@@ -13,5 +13,5 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: 3.9
-      - run: pip install mkdocs mkdocs-material mkdocstrings pymdown-extensions markdown-katex
+      - run: pip install mkdocs mkdocs-material mkdocstrings-python pymdown-extensions markdown-katex
       - run: mkdocs gh-deploy --force --clean --verbose
