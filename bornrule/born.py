@@ -20,7 +20,6 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
     It supports both dense and sparse input and GPU-accelerated computing via [CuPy](https://cupy.dev).
     This classifier is suitable for classification with non-negative feature vectors.
     The data `X` are treated as unnormalized probability distributions.
-    For different data types, see [Born's Layer](/pytorch/).
 
     Parameters
     ----------

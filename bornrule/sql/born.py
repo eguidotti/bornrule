@@ -19,7 +19,6 @@ class BornClassifierSQL:
     Data items are to be passed as list of dictionaries in the format `[{feature: value, ...}, ...]`.
     This classifier is suitable for classification with non-negative feature values.
     The values are treated as unnormalized probability distributions.
-    For different data types, see [Born's Layer](/pytorch/).
 
     Parameters
     ----------
