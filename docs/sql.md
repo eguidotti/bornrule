@@ -1,5 +1,9 @@
 # Born's Classifier SQL
 
+```py
+from bornrule.sql import BornClassifierSQL
+```
+
 !!! warning 
     
     This SQL implementation is in beta release. 

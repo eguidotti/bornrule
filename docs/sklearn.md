@@ -1,5 +1,9 @@
 # Born's Classifier
 
+```py
+from bornrule import BornClassifier
+```
+
 ::: bornrule.BornClassifier
     options:
       members:

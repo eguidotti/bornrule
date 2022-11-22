@@ -1,6 +1,18 @@
 # Get Started
 
-<img style="float:right; height:120px" src="https://upload.wikimedia.org/wikipedia/en/thumb/0/08/Logo_for_Conference_on_Neural_Information_Processing_Systems.svg/1200px-Logo_for_Conference_on_Neural_Information_Processing_Systems.svg.png" />
+<style>
+  @media (max-width: 767px) {
+    .hidden-mobile {
+      display: none;
+    }
+  }
+</style>
+
+<img 
+    class="hidden-mobile" 
+    style="float:right; height:120px" 
+    src="https://upload.wikimedia.org/wikipedia/en/thumb/0/08/Logo_for_Conference_on_Neural_Information_Processing_Systems.svg/1200px-Logo_for_Conference_on_Neural_Information_Processing_Systems.svg.png" 
+/>
 
 This website contains the documentation for the package `bornrule` available on [PyPI](https://pypi.org/project/bornrule/).
 The package implements the classifier proposed in the paper:
