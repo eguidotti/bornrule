@@ -33,6 +33,7 @@ from bornrule import BornClassifier
 ```py
 from bornrule.torch import Born
 ```
+
 - Use it as any other `torch` layer
 - Supports real and complex-valued inputs. Outputs probabilities in the range [0, 1]
 - Documentation available [here](https://eguidotti.github.io/bornrule/pytorch/)
