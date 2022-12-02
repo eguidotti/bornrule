@@ -322,7 +322,15 @@ class Database:
 
     def _sql_explain(self, items=None):
         if items is None:
-            return f"{self._sql_WITH()} SELECT * FROM HW_jk"
+            return f"""
+                {self._sql_WITH()} 
+                SELECT 
+                    {self.j},
+                    {self.k},
+                    {self.w}
+                FROM 
+                    HW_jk
+                """
 
         return f"""
             {self._sql_WITH()}, 
