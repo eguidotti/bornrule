@@ -34,6 +34,20 @@ class BornClassifierSQL:
     type_classes : TraversibleType
         [SQLAlchemy type](https://docs.sqlalchemy.org/en/14/core/type_basics.html#generic-camelcase-types)
         of the classes.
+     field_features : str
+        Label to use for features.
+     field_classes : str
+       Label to use for classes.
+     field_items : str
+        Label to use for items.
+     field_weights : str
+        Label to use for weights.
+     table_corpus : str
+         Name of the table containing the corpus.
+     table_params : str
+        Name of the table containing the model's hyper-parameters.
+     table_weights : str
+        Name of the table containing the model's weigths.
 
     Attributes
     ----------
@@ -43,7 +57,9 @@ class BornClassifierSQL:
 
     """
 
-    def __init__(self, engine='sqlite:///', prefix='bc', type_features=String, type_classes=Integer):
+    def __init__(self, engine='sqlite:///', prefix='bc', type_features=String, type_classes=Integer,
+                 field_features="feature", field_classes="class", field_items="item", field_weights="weight",
+                 table_corpus="corpus", table_params="params", table_weights="weights"):
 
         if isinstance(engine, str):
             engine = create_engine(engine, echo=False)
@@ -52,7 +68,14 @@ class BornClassifierSQL:
             'engine': engine,
             'prefix': prefix,
             'type_features': type_features,
-            'type_classes': type_classes
+            'type_classes': type_classes,
+            'field_features': field_features,
+            'field_classes': field_classes,
+            'field_items': field_items,
+            'field_weights': field_weights,
+            'table_params': table_params,
+            'table_corpus': table_corpus,
+            'table_weights': table_weights,
         }
 
         slug = engine.url.get_dialect().name
@@ -78,7 +101,7 @@ class BornClassifierSQL:
             Model's hyper-parameters `a`, `b`, `h`.
 
         """
-        with self.db.connect() as con:
+        with self.db.begin() as con:
             return self.db.read_params(con)
 
     def set_params(self, a, b, h):
@@ -105,7 +128,7 @@ class BornClassifierSQL:
         if h < 0:
             raise ValueError("The parameter 'h' must be non-negative.")
 
-        with self.db.connect() as con:
+        with self.db.begin() as con:
             self.db.write_params(con, a=a, b=b, h=h)
 
     def fit(self, X, y, sample_weight=None):
@@ -131,7 +154,7 @@ class BornClassifierSQL:
         self.db.check_editable()
         self._validate(X=X, y=y, sample_weight=sample_weight)
 
-        with self.db.connect() as con:
+        with self.db.begin() as con:
             self.db.table_corpus.drop(con, checkfirst=True)
 
         return self.partial_fit(X, y, sample_weight=sample_weight)
@@ -165,7 +188,7 @@ class BornClassifierSQL:
         if sample_weight is None:
             sample_weight = [1] * len(X)
 
-        with self.db.connect() as con:
+        with self.db.begin() as con:
             self.db.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
 
         return self
@@ -187,10 +210,10 @@ class BornClassifierSQL:
         self.db.check_fitted()
         self._validate(X=X)
 
-        with self.db.connect() as con:
+        with self.db.begin() as con:
             classes = self.db.predict(con, X=X)
 
-        classes = dict(zip(classes[self.db.FIELD_ITEM], classes[self.db.FIELD_CLASS]))
+        classes = dict(zip(classes[self.db.n], classes[self.db.k]))
         classes = [classes[i] if i in classes else None for i in range(len(X))]
 
         return classes
@@ -212,10 +235,10 @@ class BornClassifierSQL:
         self.db.check_fitted()
         self._validate(X=X)
 
-        with self.db.connect() as con:
+        with self.db.begin() as con:
             proba = self.db.predict_proba(con, X=X)
 
-        proba = self._pivot(proba, index=self.db.FIELD_ITEM, columns=self.db.FIELD_CLASS, values=self.db.FIELD_WEIGHT)
+        proba = self._pivot(proba, index=self.db.n, columns=self.db.k, values=self.db.w)
         proba = proba.reindex(range(len(X))).sparse.to_dense()
 
         return proba
@@ -264,10 +287,10 @@ class BornClassifierSQL:
         if X is not None:
             self._validate(X=X, sample_weight=sample_weight)
 
-        with self.db.connect() as con:
+        with self.db.begin() as con:
             W = self.db.explain(con, X=X, sample_weight=sample_weight)
 
-        return self._pivot(W, index=self.db.FIELD_FEATURE, columns=self.db.FIELD_CLASS, values=self.db.FIELD_WEIGHT)
+        return self._pivot(W, index=self.db.j, columns=self.db.k, values=self.db.w)
 
     def deploy(self):
         """Deploy the instance
@@ -276,7 +299,7 @@ class BornClassifierSQL:
         A deployed instance cannot be modified. To update a deployed instance, undeploy it first.
 
         """
-        with self.db.connect() as con:
+        with self.db.begin() as con:
             self.db.deploy(con)
 
     def undeploy(self):
@@ -286,7 +309,7 @@ class BornClassifierSQL:
         Useful for development, testing, and incremental fit.
 
         """
-        with self.db.connect() as con:
+        with self.db.begin() as con:
             self.db.undeploy(con)
 
     @staticmethod

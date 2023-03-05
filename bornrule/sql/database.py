@@ -12,19 +12,23 @@ class Database:
     SUM = 'SUM'
     POW = 'POW'
 
-    TABLE_PARAMS = "params"
-    TABLE_CORPUS = "corpus"
-    TABLE_WEIGHTS = "weights"
+    def __init__(self, engine: Engine, prefix, type_features, type_classes,
+                 field_features, field_classes, field_items, field_weights,
+                 table_params, table_corpus, table_weights):
 
-    n = FIELD_ITEM = "item"
-    j = FIELD_FEATURE = "feature"
-    k = FIELD_CLASS = "class"
-    w = FIELD_WEIGHT = "weight"
-
-    def __init__(self, engine: Engine, prefix, type_features, type_classes):
         self.prefix = prefix
+
         self.type_features = type_features
         self.type_classes = type_classes
+
+        self.table_params = table_params
+        self.table_corpus = table_corpus
+        self.table_weights = table_weights
+
+        self.j = self.field_features = field_features
+        self.k = self.field_classes = field_classes
+        self.n = self.field_items = field_items
+        self.w = self.field_weights = field_weights
 
         if isinstance(engine, str):
             self.engine = create_engine(engine, echo=False)
@@ -32,7 +36,7 @@ class Database:
             self.engine = engine
 
         self.table_params = Table(
-            f"{self.prefix}_{self.TABLE_PARAMS}", MetaData(),
+            f"{self.prefix}_{self.table_params}", MetaData(),
             Column('prefix', String, primary_key=True),
             Column('a', Float),
             Column('b', Float),
@@ -40,25 +44,28 @@ class Database:
         )
 
         self.table_corpus = Table(
-            f"{self.prefix}_{self.TABLE_CORPUS}", MetaData(),
-            Column(self.FIELD_FEATURE, self.type_features, primary_key=True),
-            Column(self.FIELD_CLASS, self.type_classes, primary_key=True),
-            Column(self.FIELD_WEIGHT, Float),
+            f"{self.prefix}_{self.table_corpus}", MetaData(),
+            Column(self.field_features, self.type_features, primary_key=True),
+            Column(self.field_classes, self.type_classes, primary_key=True),
+            Column(self.field_weights, Float),
         )
 
         self.table_weights = Table(
-            f"{self.prefix}_{self.TABLE_WEIGHTS}", MetaData(),
-            Column(self.FIELD_FEATURE, self.type_features, primary_key=True),
-            Column(self.FIELD_CLASS, self.type_classes, primary_key=True),
-            Column(self.FIELD_WEIGHT, Float),
+            f"{self.prefix}_{self.table_weights}", MetaData(),
+            Column(self.field_features, self.type_features, primary_key=True),
+            Column(self.field_classes, self.type_classes, primary_key=True),
+            Column(self.field_weights, Float),
         )
 
         if not self.exists(self.table_params):
-            with self.connect() as con:
+            with self.begin() as con:
                 self.write_params(con, a=0.5, b=1, h=1)
 
     def connect(self):
         return self.engine.connect()
+
+    def begin(self):
+        return self.engine.begin()
 
     def exists(self, table):
         return inspect(self.engine).has_table(table.name)
@@ -156,8 +163,8 @@ class Database:
     def write_corpus(self, con, X, y, sample_weight):
         if_exists = {
             'if_exists': 'insert_or_sum',
-            'conflict': [self.FIELD_CLASS, self.FIELD_FEATURE],
-            'sum': [self.FIELD_WEIGHT]
+            'conflict': [self.field_classes, self.field_features],
+            'sum': [self.field_weights]
         }
 
         corpus = defaultdict(lambda: defaultdict(int))
@@ -173,21 +180,21 @@ class Database:
         values = []
         for c, d in corpus.items():
             for f, w in d.items():
-                values.append({self.FIELD_FEATURE: f, self.FIELD_CLASS: c, self.FIELD_WEIGHT: w})
+                values.append({self.field_features: f, self.field_classes: c, self.field_weights: w})
 
         return self.write(con, table=self.table_corpus, values=values, **if_exists)
 
     def write_items(self, con, X):
         table = Table(
             f"{self.prefix}_items_{md5(str(uuid1()).encode()).hexdigest()[:12]}", MetaData(),
-            Column(self.FIELD_ITEM, Integer, primary_key=True),
-            Column(self.FIELD_FEATURE, self.type_features, primary_key=True),
-            Column(self.FIELD_WEIGHT, Float),
+            Column(self.field_items, Integer, primary_key=True),
+            Column(self.field_features, self.type_features, primary_key=True),
+            Column(self.field_weights, Float),
             prefixes=["TEMPORARY"],
         )
 
         values = [
-            {self.FIELD_ITEM: i, self.FIELD_FEATURE: f, self.FIELD_WEIGHT: w}
+            {self.field_items: i, self.field_features: f, self.field_weights: w}
             for i, x in enumerate(X)
             for f, w in x.items()
         ]
@@ -197,13 +204,13 @@ class Database:
     def write_sample_weight(self, con, sample_weight):
         table = Table(
             f"{self.prefix}_sample_weight_{md5(str(uuid1()).encode()).hexdigest()[:12]}", MetaData(),
-            Column(self.FIELD_ITEM, Integer, primary_key=True),
-            Column(self.FIELD_WEIGHT, Float),
+            Column(self.field_items, Integer, primary_key=True),
+            Column(self.field_weights, Float),
             prefixes=["TEMPORARY"],
         )
 
         values = [
-            {self.FIELD_ITEM: i, self.FIELD_WEIGHT: w}
+            {self.field_items: i, self.field_weights: w}
             for i, w in enumerate(sample_weight)
         ]
 
