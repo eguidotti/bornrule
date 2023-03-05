@@ -144,11 +144,18 @@ class Database:
         return con.execute(text(sql), values)
 
     def read_params(self, con):
-        params = con.execute(f"SELECT a, b, h FROM {self.table_params}")
+        params = con.execute(text(f"SELECT a, b, h FROM {self.table_params}"))
         values = params.fetchone()
         keys = params.keys()
 
         return dict(zip(keys, values))
+
+    def read_sql(self, sql, con):
+        cur = con.execute(text(sql) if isinstance(sql, str) else sql)
+        data = [tuple(row) for row in cur.fetchall()]
+        columns = cur.keys()
+
+        return pd.DataFrame(data, columns=columns)
 
     def write_params(self, con, a, b, h):
         if_exists = {
@@ -232,7 +239,7 @@ class Database:
             """
 
         self.write(con, table=self.table_weights)
-        con.execute(sql)
+        con.execute(text(sql))
 
     def undeploy(self, con):
         if not self.exists(self.table_corpus):
@@ -263,13 +270,13 @@ class Database:
         items = self.write_items(con, X)
         sql = self._sql_predict(items)
 
-        return pd.read_sql(sql, con)
+        return self.read_sql(sql, con)
 
     def predict_proba(self, con, X):
         items = self.write_items(con, X)
         sql = self._sql_predict_proba(items)
 
-        return pd.read_sql(sql, con)
+        return self.read_sql(sql, con)
 
     def explain(self, con, X=None, sample_weight=None):
         if X is None:
@@ -287,7 +294,7 @@ class Database:
             items = self.write_items(con, X)
             sql = self._sql_explain(items)
 
-        return pd.read_sql(sql, con)
+        return self.read_sql(sql, con)
 
     def _sql_predict(self, items):
         return f"""
