@@ -58,14 +58,12 @@ class Database:
         )
 
         if not self.exists(self.table_params):
-            with self.begin() as con:
+            with self.connect() as con:
                 self.write_params(con, a=0.5, b=1, h=1)
+                con.commit()
 
     def connect(self):
         return self.engine.connect()
-
-    def begin(self):
-        return self.engine.begin()
 
     def exists(self, table):
         return inspect(self.engine).has_table(table.name)
