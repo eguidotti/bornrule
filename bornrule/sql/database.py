@@ -59,8 +59,8 @@ class Database:
 
         if not self.exists(self.table_params):
             with self.connect() as con:
-                self.write_params(con, a=0.5, b=1, h=1)
-                con.commit()
+                with con.begin():
+                    self.write_params(con, a=0.5, b=1, h=1)
 
     def connect(self):
         return self.engine.connect()

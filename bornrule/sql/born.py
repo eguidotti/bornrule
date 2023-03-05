@@ -102,10 +102,7 @@ class BornClassifierSQL:
 
         """
         with self.db.connect() as con:
-            params = self.db.read_params(con)
-            con.rollback()
-
-        return params
+            return self.db.read_params(con)
 
     def set_params(self, a, b, h):
         """Set parameters.
@@ -132,8 +129,8 @@ class BornClassifierSQL:
             raise ValueError("The parameter 'h' must be non-negative.")
 
         with self.db.connect() as con:
-            self.db.write_params(con, a=a, b=b, h=h)
-            con.commit()
+            with con.begin():
+                self.db.write_params(con, a=a, b=b, h=h)
 
     def fit(self, X, y, sample_weight=None):
         """Fit the classifier according to the training data X, y.
@@ -159,8 +156,8 @@ class BornClassifierSQL:
         self._validate(X=X, y=y, sample_weight=sample_weight)
 
         with self.db.connect() as con:
-            self.db.table_corpus.drop(con, checkfirst=True)
-            con.commit()
+            with con.begin():
+                self.db.table_corpus.drop(con, checkfirst=True)
 
         return self.partial_fit(X, y, sample_weight=sample_weight)
 
@@ -194,8 +191,8 @@ class BornClassifierSQL:
             sample_weight = [1] * len(X)
 
         with self.db.connect() as con:
-            self.db.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
-            con.commit()
+            with con.begin():
+                self.db.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
 
         return self
 
@@ -218,7 +215,6 @@ class BornClassifierSQL:
 
         with self.db.connect() as con:
             classes = self.db.predict(con, X=X)
-            con.rollback()
 
         classes = dict(zip(classes[self.db.n], classes[self.db.k]))
         classes = [classes[i] if i in classes else None for i in range(len(X))]
@@ -244,7 +240,6 @@ class BornClassifierSQL:
 
         with self.db.connect() as con:
             proba = self.db.predict_proba(con, X=X)
-            con.rollback()
 
         proba = self._pivot(proba, index=self.db.n, columns=self.db.k, values=self.db.w)
         proba = proba.reindex(range(len(X))).sparse.to_dense()
@@ -297,7 +292,6 @@ class BornClassifierSQL:
 
         with self.db.connect() as con:
             W = self.db.explain(con, X=X, sample_weight=sample_weight)
-            con.rollback()
 
         return self._pivot(W, index=self.db.j, columns=self.db.k, values=self.db.w)
 
@@ -309,8 +303,8 @@ class BornClassifierSQL:
 
         """
         with self.db.connect() as con:
-            self.db.deploy(con)
-            con.commit()
+            with con.begin():
+                self.db.deploy(con)
 
     def undeploy(self):
         """Undeploy the instance
@@ -320,8 +314,8 @@ class BornClassifierSQL:
 
         """
         with self.db.connect() as con:
-            self.db.undeploy(con)
-            con.commit()
+            with con.begin():
+                self.db.undeploy(con)
 
     def is_fitted(self):
         """Is fitted?
