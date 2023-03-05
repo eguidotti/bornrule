@@ -223,17 +223,35 @@ class Database:
 
         return self.write(con, table=table, values=values)
 
+    def is_deployed(self):
+        return self.exists(self.table_weights)
+
+    def is_fitted(self):
+        return self.exists(self.table_corpus) or self.is_deployed()
+
+    def check_fitted(self):
+        if not self.is_fitted():
+            raise ValueError(
+                f"This instance is not fitted yet."
+            )
+
+    def check_editable(self):
+        if self.is_deployed():
+            raise ValueError(
+                "Cannot modify a deployed instance."
+            )
+
     def deploy(self, con):
         self.check_fitted()
 
-        if self.exists(self.table_weights):
+        if self.is_deployed():
             raise ValueError(
                 "This instance is already deployed. Nothing to do."
             )
 
         sql = f"""
             INSERT INTO  {self.table_weights} 
-            {self._sql_WITH()} 
+            {self._sql_WITH(cache=False)} 
             SELECT {self.j}, {self.k}, {self.w} 
             FROM HW_jk
             """
@@ -247,40 +265,32 @@ class Database:
                 "This instance has no corpus. Cannot undeploy: information would be lost."
             )
 
-        if not self.exists(self.table_weights):
+        if not self.is_deployed():
             raise ValueError(
                 "This instance is already undeployed. Nothing to do."
             )
 
         self.table_weights.drop(con)
 
-    def check_fitted(self):
-        if not self.exists(self.table_weights) and not self.exists(self.table_corpus):
-            raise ValueError(
-                f"This instance is not fitted yet."
-            )
-
-    def check_editable(self):
-        if self.exists(self.table_weights):
-            raise ValueError(
-                "Cannot modify a deployed instance."
-            )
-
     def predict(self, con, X):
+        cache = self.is_deployed()
         items = self.write_items(con, X)
-        sql = self._sql_predict(items)
+        sql = self._sql_predict(cache, items)
 
         return self.read_sql(sql, con)
 
     def predict_proba(self, con, X):
+        cache = self.is_deployed()
         items = self.write_items(con, X)
-        sql = self._sql_predict_proba(items)
+        sql = self._sql_predict_proba(cache, items)
 
         return self.read_sql(sql, con)
 
     def explain(self, con, X=None, sample_weight=None):
+        cache = self.is_deployed()
+
         if X is None:
-            sql = self._sql_explain()
+            sql = self._sql_explain(cache)
 
         else:
             norm = [sum(v for k, v in x.items()) for x in X]
@@ -292,13 +302,13 @@ class Database:
                 X = [{k: pow(w, p) * v / n for k, v in x.items()} for x, n, w in zip(X, norm, sample_weight) if n > 0]
 
             items = self.write_items(con, X)
-            sql = self._sql_explain(items)
+            sql = self._sql_explain(cache, items)
 
         return self.read_sql(sql, con)
 
-    def _sql_predict(self, items):
+    def _sql_predict(self, cache, items):
         return f"""
-            {self._sql_WITH()}, 
+            {self._sql_WITH(cache)}, 
                 X_njk AS ({self._sql_X_njk(items)}), 
                 X_nk AS ({self._sql_X_nk()}), 
                 R_nk AS (
@@ -318,9 +328,9 @@ class Database:
                 idx = 1
             """
 
-    def _sql_predict_proba(self, items):
+    def _sql_predict_proba(self, cache, items):
         return f"""
-            {self._sql_WITH()}, 
+            {self._sql_WITH(cache)}, 
                 X_njk AS ({self._sql_X_njk(items)}), 
                 X_nk AS ({self._sql_X_nk()}), 
                 U_nk AS ({self._sql_U_nk()}), 
@@ -334,10 +344,10 @@ class Database:
                 Y_nk
             """
 
-    def _sql_explain(self, items=None):
+    def _sql_explain(self, cache, items=None):
         if items is None:
             return f"""
-                {self._sql_WITH()} 
+                {self._sql_WITH(cache)} 
                 SELECT 
                     {self.j},
                     {self.k},
@@ -347,7 +357,7 @@ class Database:
                 """
 
         return f"""
-            {self._sql_WITH()}, 
+            {self._sql_WITH(cache)}, 
                 X_njk AS ({self._sql_X_njk(items)})
             SELECT 
                 {self.j},
@@ -361,7 +371,7 @@ class Database:
             """
 
         # return f"""
-        #     {self._sql_WITH()},
+        #     {self._sql_WITH(cache)},
         #         X_njk AS ({self._sql_X_njk(items)}),
         #         X_nk AS ({self._sql_X_nk()}),
         #         U_nk AS ({self._sql_U_nk()}),
@@ -388,8 +398,8 @@ class Database:
         #         Y_njk.{self.k}
         #     """
 
-    def _sql_WITH(self):
-        if self.exists(self.table_weights):
+    def _sql_WITH(self, cache):
+        if cache:
             sql = f"""
                 WITH 
                     VAL AS ({self._sql_VAL()}),

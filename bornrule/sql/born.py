@@ -34,19 +34,19 @@ class BornClassifierSQL:
     type_classes : TraversibleType
         [SQLAlchemy type](https://docs.sqlalchemy.org/en/14/core/type_basics.html#generic-camelcase-types)
         of the classes.
-     field_features : str
+    field_features : str
         Label to use for features.
-     field_classes : str
+    field_classes : str
        Label to use for classes.
-     field_items : str
+    field_items : str
         Label to use for items.
-     field_weights : str
+    field_weights : str
         Label to use for weights.
-     table_corpus : str
+    table_corpus : str
          Name of the table containing the corpus.
-     table_params : str
+    table_params : str
         Name of the table containing the model's hyper-parameters.
-     table_weights : str
+    table_weights : str
         Name of the table containing the model's weigths.
 
     Attributes
@@ -101,7 +101,7 @@ class BornClassifierSQL:
             Model's hyper-parameters `a`, `b`, `h`.
 
         """
-        with self.db.begin() as con:
+        with self.db.connect() as con:
             return self.db.read_params(con)
 
     def set_params(self, a, b, h):
@@ -210,7 +210,7 @@ class BornClassifierSQL:
         self.db.check_fitted()
         self._validate(X=X)
 
-        with self.db.begin() as con:
+        with self.db.connect() as con:
             classes = self.db.predict(con, X=X)
 
         classes = dict(zip(classes[self.db.n], classes[self.db.k]))
@@ -235,7 +235,7 @@ class BornClassifierSQL:
         self.db.check_fitted()
         self._validate(X=X)
 
-        with self.db.begin() as con:
+        with self.db.connect() as con:
             proba = self.db.predict_proba(con, X=X)
 
         proba = self._pivot(proba, index=self.db.n, columns=self.db.k, values=self.db.w)
@@ -287,7 +287,7 @@ class BornClassifierSQL:
         if X is not None:
             self._validate(X=X, sample_weight=sample_weight)
 
-        with self.db.begin() as con:
+        with self.db.connect() as con:
             W = self.db.explain(con, X=X, sample_weight=sample_weight)
 
         return self._pivot(W, index=self.db.j, columns=self.db.k, values=self.db.w)
@@ -311,6 +311,32 @@ class BornClassifierSQL:
         """
         with self.db.begin() as con:
             self.db.undeploy(con)
+
+    def is_fitted(self):
+        """Is fitted?
+
+        Checks whether the instance is fitted.
+
+        Returns
+        -------
+        is : bool
+            Returns `True` if the instance is fitted, `False` otherwise.
+
+        """
+        return self.db.is_fitted()
+
+    def is_deployed(self):
+        """Is deployed?
+
+        Checks whether the instance is deployed.
+
+        Returns
+        -------
+        is : bool
+            Returns `True` if the instance is deployed, `False` otherwise.
+
+        """
+        return self.db.is_deployed()
 
     @staticmethod
     def _validate(X, y="no_validation", sample_weight=None):
