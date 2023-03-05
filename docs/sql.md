@@ -22,3 +22,5 @@ from bornrule.sql import BornClassifierSQL
         - explain
         - deploy
         - undeploy
+        - is_fitted
+        - is_deployed
