@@ -20,8 +20,8 @@ The package implements the classifier proposed in the paper:
 > Emanuele Guidotti and Alfio Ferrara. Text Classification with Born’s Rule. *Advances in Neural Information Processing Systems*, 2022.
 
 <div align="center">
+  [<a href="https://pypi.org/project/bornrule/">PyPI</a>] - 
   [<a href="https://openreview.net/pdf?id=sNcn-E3uPHA">Paper</a>] - 
-  [<a href="https://nips.cc/media/neurips-2022/Slides/54723.pdf">Slides</a>] - 
   [<a href="https://nips.cc/media/PosterPDFs/NeurIPS%202022/8d7628dd7a710c8638dbd22d4421ee46.png">Poster</a>]
 </div>
 
@@ -64,8 +64,6 @@ from bornrule.sql import BornClassifierSQL
 - Documentation available [here](https://bornrule.eguidotti.com/sql/)
 
 ## Cite as
-
-Please cite the following when using this software:
 
 ```bibtex
 @inproceedings{guidotti2022text,
