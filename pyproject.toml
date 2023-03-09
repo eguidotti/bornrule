@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "bornrule"
-version = "0.1.5"
+version = "0.1.6"
 license = "GPL-3.0-or-later"
 description = "Classification with Born's rule"
 authors = ["Emanuele Guidotti <emanuele.guidotti@unine.ch>"]
 readme = "README.min.md"
 repository = "https://github.com/eguidotti/bornrule"
-documentation = "https://eguidotti.github.io/bornrule/"
+documentation = "https://bornrule.eguidotti.com"
 
 [tool.poetry.dependencies]
 python = ">=3.6"

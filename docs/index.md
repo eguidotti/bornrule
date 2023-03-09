@@ -41,7 +41,7 @@ from bornrule import BornClassifier
 
 - Use it as any other `sklearn` classifier
 - Supports both dense and sparse input and GPU-accelerated computing via `cupy`
-- Documentation available [here](https://eguidotti.github.io/bornrule/sklearn/)
+- Documentation available [here](https://bornrule.eguidotti.com/sklearn/)
 
 ### PyTorch
 
@@ -51,7 +51,7 @@ from bornrule.torch import Born
 
 - Use it as any other `torch` layer
 - Supports real and complex-valued inputs. Outputs probabilities in the range [0, 1]
-- Documentation available [here](https://eguidotti.github.io/bornrule/pytorch/)
+- Documentation available [here](https://bornrule.eguidotti.com/pytorch/)
 
 ### SQL
 
@@ -61,7 +61,7 @@ from bornrule.sql import BornClassifierSQL
 
 - Use it for in-database classification
 - Supports inputs represented as json `{feature: value, ...}`
-- Documentation available [here](https://eguidotti.github.io/bornrule/sql/)
+- Documentation available [here](https://bornrule.eguidotti.com/sql/)
 
 ## Cite as
 

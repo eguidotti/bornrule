@@ -5,9 +5,9 @@
 > Emanuele Guidotti and Alfio Ferrara. Text Classification with Born’s Rule. *Advances in Neural Information Processing Systems*, 2022.
 
 <div align="center">
-  [<a href="https://openreview.net/pdf?id=sNcn-E3uPHA">Paper</a>] - 
-  [<a href="https://nips.cc/media/neurips-2022/Slides/54723.pdf">Slides</a>] - 
-  [<a href="https://nips.cc/media/PosterPDFs/NeurIPS%202022/8d7628dd7a710c8638dbd22d4421ee46.png">Poster</a>]
+  [<a href="https://openreview.net/pdf?id=sNcn-E3uPHA">Paper</a>] -
+  [<a href="https://nips.cc/media/PosterPDFs/NeurIPS%202022/8d7628dd7a710c8638dbd22d4421ee46.png">Poster</a>] - 
+  [<a href="https://bornrule.eguidotti.com">Docs</a>]
 </div>
 
 ## Installation
@@ -26,7 +26,7 @@ from bornrule import BornClassifier
 
 - Use it as any other `sklearn` classifier
 - Supports both dense and sparse input and GPU-accelerated computing via `cupy`
-- Documentation available [here](https://eguidotti.github.io/bornrule/sklearn/)
+- Documentation available [here](https://bornrule.eguidotti.com/sklearn/)
 
 ### PyTorch
 
@@ -36,7 +36,7 @@ from bornrule.torch import Born
 
 - Use it as any other `torch` layer
 - Supports real and complex-valued inputs. Outputs probabilities in the range [0, 1]
-- Documentation available [here](https://eguidotti.github.io/bornrule/pytorch/)
+- Documentation available [here](https://bornrule.eguidotti.com/pytorch/)
 
 ### SQL
 
@@ -46,7 +46,7 @@ from bornrule.sql import BornClassifierSQL
 
 - Use it for in-database classification
 - Supports inputs represented as json `{feature: value, ...}`
-- Documentation available [here](https://eguidotti.github.io/bornrule/sql/)
+- Documentation available [here](https://bornrule.eguidotti.com/sql/)
 
 ## Paper replication
 
@@ -84,8 +84,6 @@ python -u nips.py > nips.log &
 The script generates a folder named `results` with all the results in the paper. Additional information are saved to the log file `nips.log`
 
 ## Cite as
-
-Please cite the following when using this software:
 
 ```bibtex
 @inproceedings{guidotti2022text,
