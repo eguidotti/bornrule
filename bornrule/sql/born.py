@@ -198,6 +198,7 @@ class BornClassifierSQL:
         with self.db.connect() as con:
             df = self.db.read_sql("SELECT name FROM sqlite_master WHERE type='table'", con)
             print(df)
+        print(self.db.is_params())
 
         with self.db.connect() as con:
             with con.begin():
