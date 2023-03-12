@@ -21,10 +21,6 @@ class Database:
         self.type_features = type_features
         self.type_classes = type_classes
 
-        self.table_params = table_params
-        self.table_corpus = table_corpus
-        self.table_weights = table_weights
-
         self.j = self.field_features = field_features
         self.k = self.field_classes = field_classes
         self.n = self.field_items = field_items
@@ -36,7 +32,7 @@ class Database:
             self.engine = engine
 
         self.table_params = Table(
-            f"{self.prefix}_{self.table_params}", MetaData(),
+            f"{self.prefix}_{table_params}", MetaData(),
             Column('prefix', String, primary_key=True),
             Column('a', Float, nullable=False),
             Column('b', Float, nullable=False),
@@ -44,14 +40,14 @@ class Database:
         )
 
         self.table_corpus = Table(
-            f"{self.prefix}_{self.table_corpus}", MetaData(),
+            f"{self.prefix}_{table_corpus}", MetaData(),
             Column(self.field_features, self.type_features, primary_key=True),
             Column(self.field_classes, self.type_classes, primary_key=True),
             Column(self.field_weights, Float, nullable=False),
         )
 
         self.table_weights = Table(
-            f"{self.prefix}_{self.table_weights}", MetaData(),
+            f"{self.prefix}_{table_weights}", MetaData(),
             Column(self.field_features, self.type_features, primary_key=True),
             Column(self.field_classes, self.type_classes, primary_key=True),
             Column(self.field_weights, Float, nullable=False),
