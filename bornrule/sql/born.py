@@ -193,14 +193,18 @@ class BornClassifierSQL:
         if sample_weight is None:
             sample_weight = [1] * len(X)
 
-        if not self.db.is_params():
-            with self.db.connect() as con:
-                with con.begin():
-                    self.db.write_params(con, **self._params())
+        is_params = self.db.is_params()
+        print(is_params)
+        with self.db.connect() as con:
+            df = self.db.read_sql("SELECT name FROM sqlite_master WHERE type='table'", con)
+            print(df)
 
         with self.db.connect() as con:
             with con.begin():
                 self.db.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
+
+                if not is_params:
+                    self.db.write_params(con, **self._params())
 
         return self
 
