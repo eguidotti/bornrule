@@ -101,10 +101,10 @@ class BornClassifierSQL:
             Model's hyper-parameters `a`, `b`, `h`.
 
         """
-        if not self.db.is_params():
-            return self._params()
-
         with self.db.connect() as con:
+            if not self.db.is_params(con):
+                return self._params()
+
             return self.db.read_params(con)
 
     def set_params(self, a, b, h):
@@ -120,8 +120,6 @@ class BornClassifierSQL:
             Entropy. Must be non-negative.
 
         """
-        self.db.check_editable()
-
         if a <= 0:
             raise ValueError("The parameter 'a' must be strictly positive.")
 
@@ -133,8 +131,8 @@ class BornClassifierSQL:
 
         with self.db.connect() as con:
             with con.begin():
+                self.db.check_editable(con)
                 self.db.write_params(con, a=a, b=b, h=h)
-            con.commit()
 
     def fit(self, X, y, sample_weight=None):
         """Fit the classifier according to the training data X, y.
@@ -156,11 +154,11 @@ class BornClassifierSQL:
             Returns the instance itself.
 
         """
-        self.db.check_editable()
         self._validate(X=X, y=y, sample_weight=sample_weight)
 
         with self.db.connect() as con:
             with con.begin():
+                self.db.check_editable(con)
                 self.db.table_corpus.drop(con, checkfirst=True)
 
         return self.partial_fit(X, y, sample_weight=sample_weight)
@@ -188,25 +186,17 @@ class BornClassifierSQL:
             Returns the instance itself.
 
         """
-        self.db.check_editable()
         self._validate(X=X, y=y, sample_weight=sample_weight)
 
         if sample_weight is None:
             sample_weight = [1] * len(X)
 
-        is_params = self.db.is_params()
-        print(is_params)
-        print(self.db.is_params())
-        # with self.db.connect() as con:
-        #     df = self.db.read_sql("SELECT name FROM sqlite_master WHERE type='table'", con)
-        #     print(df)
-        print(self.db.is_params())
-
         with self.db.connect() as con:
             with con.begin():
+                self.db.check_editable(con)
                 self.db.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
 
-                if not is_params:
+                if not self.db.is_params(con):
                     self.db.write_params(con, **self._params())
 
         return self
@@ -225,10 +215,10 @@ class BornClassifierSQL:
             Predicted target classes for `X`.
 
         """
-        self.db.check_fitted()
         self._validate(X=X)
 
         with self.db.connect() as con:
+            self.db.check_fitted(con)
             classes = self.db.predict(con, X=X)
 
         classes = dict(zip(classes[self.db.n], classes[self.db.k]))
@@ -250,10 +240,10 @@ class BornClassifierSQL:
             Returns the probability of the samples for each class in the model.
 
         """
-        self.db.check_fitted()
         self._validate(X=X)
 
         with self.db.connect() as con:
+            self.db.check_fitted(con)
             proba = self.db.predict_proba(con, X=X)
 
         proba = self._pivot(proba, index=self.db.n, columns=self.db.k, values=self.db.w)
@@ -300,12 +290,11 @@ class BornClassifierSQL:
             Returns the feature importance for each class in the model.
 
         """
-        self.db.check_fitted()
-
         if X is not None:
             self._validate(X=X, sample_weight=sample_weight)
 
         with self.db.connect() as con:
+            self.db.check_fitted(con)
             W = self.db.explain(con, X=X, sample_weight=sample_weight)
 
         return self._pivot(W, index=self.db.j, columns=self.db.k, values=self.db.w)
@@ -354,7 +343,8 @@ class BornClassifierSQL:
             Returns `True` if the instance is fitted, `False` otherwise.
 
         """
-        return self.db.is_fitted()
+        with self.db.connect() as con:
+            return self.db.is_fitted(con)
 
     def is_deployed(self):
         """Is deployed?
@@ -367,7 +357,8 @@ class BornClassifierSQL:
             Returns `True` if the instance is deployed, `False` otherwise.
 
         """
-        return self.db.is_deployed()
+        with self.db.connect() as con:
+            return self.db.is_deployed(con)
 
     @staticmethod
     def _validate(X, y="no_validation", sample_weight=None):

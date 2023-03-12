@@ -56,8 +56,8 @@ class Database:
     def connect(self):
         return self.engine.connect()
 
-    def exists(self, table):
-        return inspect(self.engine).has_table(table.name)
+    def exists(self, con, table):
+        return inspect(con).has_table(table.name)
 
     def write(self, con, table, values=None, if_exists='fail', **kwargs):
         assert if_exists in {
@@ -69,7 +69,7 @@ class Database:
             'insert_or_sum'
         }
 
-        if not self.exists(table):
+        if not self.exists(con, table):
             table.create(con)
 
         else:
@@ -212,31 +212,34 @@ class Database:
 
         return self.write(con, table=table, values=values)
 
-    def is_params(self):
-        return self.exists(self.table_params)
+    def is_params(self, con):
+        return self.exists(con, self.table_params)
 
-    def is_fitted(self):
-        return self.exists(self.table_corpus) or self.is_deployed()
+    def is_corpus(self, con):
+        return self.exists(con, self.table_corpus)
 
-    def is_deployed(self):
-        return self.exists(self.table_weights)
+    def is_deployed(self, con):
+        return self.exists(con, self.table_weights)
 
-    def check_fitted(self):
-        if not self.is_fitted():
+    def is_fitted(self, con):
+        return self.is_corpus(con) or self.is_deployed(con)
+
+    def check_fitted(self, con):
+        if not self.is_fitted(con):
             raise ValueError(
                 f"This instance is not fitted yet."
             )
 
-    def check_editable(self):
-        if self.is_deployed():
+    def check_editable(self, con):
+        if self.is_deployed(con):
             raise ValueError(
                 "Cannot modify a deployed instance."
             )
 
     def deploy(self, con, deep):
-        self.check_fitted()
+        self.check_fitted(con)
 
-        if self.is_deployed():
+        if self.is_deployed(con):
             raise ValueError(
                 "This instance is already deployed. Nothing to do."
             )
@@ -255,13 +258,13 @@ class Database:
             self.table_corpus.drop(con)
 
     def undeploy(self, con, deep):
-        if not deep and not self.exists(self.table_corpus):
+        if not deep and not self.exists(con, self.table_corpus):
             raise ValueError(
                 "This instance has no corpus and the model would be lost. "
                 "Set deep=True to force undeploy."
             )
 
-        if not deep and not self.is_deployed():
+        if not deep and not self.is_deployed(con):
             raise ValueError(
                 "This instance is already undeployed. Nothing to do."
             )
@@ -273,21 +276,21 @@ class Database:
             self.table_corpus.drop(con, checkfirst=True)
 
     def predict(self, con, X):
-        cache = self.is_deployed()
+        cache = self.is_deployed(con)
         items = self.write_items(con, X)
         sql = self._sql_predict(cache, items)
 
         return self.read_sql(sql, con)
 
     def predict_proba(self, con, X):
-        cache = self.is_deployed()
+        cache = self.is_deployed(con)
         items = self.write_items(con, X)
         sql = self._sql_predict_proba(cache, items)
 
         return self.read_sql(sql, con)
 
     def explain(self, con, X=None, sample_weight=None):
-        cache = self.is_deployed()
+        cache = self.is_deployed(con)
 
         if X is None:
             sql = self._sql_explain(cache)

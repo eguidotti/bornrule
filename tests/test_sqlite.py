@@ -121,32 +121,30 @@ def test_sqlite(params, engine):
     # Undeploy
     sql.undeploy()
 
-    # Check params
-    assert sql.db.is_params(), "Undeployed instance has no params"
-
     # Check deployed
-    assert not sql.db.is_deployed(), "Undeployed instance is still deployed"
+    assert not sql.is_deployed(), "Undeployed instance is still deployed"
 
     # Check fitted
-    assert sql.db.is_fitted(), "Undeployed instance is not fitted"
+    assert sql.is_fitted(), "Undeployed instance is not fitted"
 
-    # Check corpus
-    assert sql.db.exists(sql.db.table_corpus), "Undeployed instance has no corpus"
+    # Check params and corpus
+    with sql.db.connect() as con:
+        assert sql.db.is_params(con), "Undeployed instance has no params"
+        assert sql.db.is_corpus(con), "Undeployed instance has no corpus"
 
     # Deep deploy
     sql.deploy(deep=True)
 
-    # Check params
-    assert sql.db.is_params(), "Deep deployed instance has no params"
-
     # Check deployed
-    assert sql.db.is_deployed(), "Deep deployed instance is not deployed"
+    assert sql.is_deployed(), "Deep deployed instance is not deployed"
 
     # Check fitted
-    assert sql.db.is_fitted(), "Deep deployed instance is not fitted"
+    assert sql.is_fitted(), "Deep deployed instance is not fitted"
 
     # Check corpus
-    assert not sql.db.exists(sql.db.table_corpus), "Deep deployed instance does have corpus"
+    with sql.db.connect() as con:
+        assert sql.db.is_params(con), "Deep deployed instance does not have params"
+        assert not sql.db.is_corpus(con), "Deep deployed instance does have corpus"
 
     # Check error on undeploy of deep deployed instance
     with pytest.raises(ValueError):
@@ -154,15 +152,6 @@ def test_sqlite(params, engine):
 
     # Deep undeploy
     sql.undeploy(deep=True)
-
-    # Check params
-    assert not sql.db.is_params(), "Deep undeployed instance does have params"
-
-    # Check deployed
-    assert not sql.db.is_deployed(), "Deep undeployed instance is still deployed"
-
-    # Check fitted
-    assert not sql.db.is_fitted(), "Deep undeployed instance is still fitted"
 
     # Check empty db
     with sql.db.connect() as con:
