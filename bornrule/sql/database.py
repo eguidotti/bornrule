@@ -57,11 +57,6 @@ class Database:
             Column(self.field_weights, Float, nullable=False),
         )
 
-        if not self.exists(self.table_params):
-            with self.connect() as con:
-                with con.begin():
-                    self.write_params(con, a=0.5, b=1, h=1)
-
     def connect(self):
         return self.engine.connect()
 
@@ -221,11 +216,14 @@ class Database:
 
         return self.write(con, table=table, values=values)
 
-    def is_deployed(self):
-        return self.exists(self.table_weights)
+    def is_params(self):
+        return self.exists(self.table_params)
 
     def is_fitted(self):
         return self.exists(self.table_corpus) or self.is_deployed()
+
+    def is_deployed(self):
+        return self.exists(self.table_weights)
 
     def check_fitted(self):
         if not self.is_fitted():
@@ -239,7 +237,7 @@ class Database:
                 "Cannot modify a deployed instance."
             )
 
-    def deploy(self, con):
+    def deploy(self, con, deep):
         self.check_fitted()
 
         if self.is_deployed():
@@ -257,18 +255,26 @@ class Database:
         self.write(con, table=self.table_weights)
         con.execute(text(sql))
 
-    def undeploy(self, con):
-        if not self.exists(self.table_corpus):
+        if deep:
+            self.table_corpus.drop(con)
+
+    def undeploy(self, con, deep):
+        if not deep and not self.exists(self.table_corpus):
             raise ValueError(
-                "This instance has no corpus. Cannot undeploy: information would be lost."
+                "This instance has no corpus and the model would be lost. "
+                "Set deep=True to force undeploy."
             )
 
-        if not self.is_deployed():
+        if not deep and not self.is_deployed():
             raise ValueError(
                 "This instance is already undeployed. Nothing to do."
             )
 
-        self.table_weights.drop(con)
+        self.table_weights.drop(con, checkfirst=True)
+
+        if deep:
+            self.table_params.drop(con, checkfirst=True)
+            self.table_corpus.drop(con, checkfirst=True)
 
     def predict(self, con, X):
         cache = self.is_deployed()

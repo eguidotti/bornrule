@@ -101,6 +101,9 @@ class BornClassifierSQL:
             Model's hyper-parameters `a`, `b`, `h`.
 
         """
+        if not self.db.is_params():
+            return self._params()
+
         with self.db.connect() as con:
             return self.db.read_params(con)
 
@@ -190,9 +193,13 @@ class BornClassifierSQL:
         if sample_weight is None:
             sample_weight = [1] * len(X)
 
+        is_params = self.db.is_params()
         with self.db.connect() as con:
             with con.begin():
                 self.db.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
+
+                if not is_params:
+                    self.db.write_params(con, **self._params())
 
         return self
 
@@ -295,27 +302,38 @@ class BornClassifierSQL:
 
         return self._pivot(W, index=self.db.j, columns=self.db.k, values=self.db.w)
 
-    def deploy(self):
+    def deploy(self, deep=False):
         """Deploy the instance
 
         Generate and store the weights that are used for prediction to speed up inference time.
         A deployed instance cannot be modified. To update a deployed instance, undeploy it first.
 
+        Parameters
+        ----------
+        deep : bool
+            Whether the corpus is dropped. Saves space but makes impossible to update the model.
+
         """
         with self.db.connect() as con:
             with con.begin():
-                self.db.deploy(con)
+                self.db.deploy(con, deep=deep)
 
-    def undeploy(self):
+    def undeploy(self, deep=False):
         """Undeploy the instance
 
         Drop the weights that are used for prediction. Weights will be recomputed each time on-the-fly.
         Useful for development, testing, and incremental fit.
 
+        Parameters
+        ----------
+        deep : bool
+            Whether the corpus and parameters are also dropped.
+            If `True`, the model is fully removed from the database.
+
         """
         with self.db.connect() as con:
             with con.begin():
-                self.db.undeploy(con)
+                self.db.undeploy(con, deep=deep)
 
     def is_fitted(self):
         """Is fitted?
@@ -345,6 +363,8 @@ class BornClassifierSQL:
 
     @staticmethod
     def _validate(X, y="no_validation", sample_weight=None):
+        """Input validation"""
+
         only_X = isinstance(y, str) and y == "no_validation"
 
         if not isinstance(X, list):
@@ -384,9 +404,19 @@ class BornClassifierSQL:
 
     @staticmethod
     def _pivot(df, index, columns, values):
+        """Pivot table"""
+
         df[values] = df[values].astype(pd.SparseDtype(float))
         df = df.pivot(index=index, columns=columns, values=values)
         df = df.astype(pd.SparseDtype(float, fill_value=0))
+
         df.rename_axis(None, axis=0, inplace=True)
         df.rename_axis(None, axis=1, inplace=True)
+
         return df
+
+    @staticmethod
+    def _params():
+        """Default hyper-parameters"""
+
+        return dict(a=0.5, b=1, h=1)

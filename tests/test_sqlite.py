@@ -117,3 +117,54 @@ def test_sqlite(params, engine):
     ex2 = pd.DataFrame.sparse.from_spmatrix(ex2, index=feature_names, columns=skl.classes_)
     assert np.allclose(ex1, ex2.loc[ex1.index][ex1.columns]), \
         f"Explanation with sample_weight does not match"
+
+    # Undeploy
+    sql.undeploy()
+
+    # Check params
+    assert sql.db.is_params(), "Undeployed instance has no params"
+
+    # Check deployed
+    assert not sql.db.is_deployed(), "Undeployed instance is still deployed"
+
+    # Check fitted
+    assert sql.db.is_fitted(), "Undeployed instance is not fitted"
+
+    # Check corpus
+    assert sql.db.exists(sql.db.table_corpus), "Undeployed instance has no corpus"
+
+    # Deep deploy
+    sql.deploy(deep=True)
+
+    # Check params
+    assert sql.db.is_params(), "Deep deployed instance has no params"
+
+    # Check deployed
+    assert sql.db.is_deployed(), "Deep deployed instance is not deployed"
+
+    # Check fitted
+    assert sql.db.is_fitted(), "Deep deployed instance is not fitted"
+
+    # Check corpus
+    assert not sql.db.exists(sql.db.table_corpus), "Deep deployed instance does have corpus"
+
+    # Check error on undeploy of deep deployed instance
+    with pytest.raises(ValueError):
+        sql.undeploy()
+
+    # Deep undeploy
+    sql.undeploy(deep=True)
+
+    # Check params
+    assert not sql.db.is_params(), "Deep undeployed instance does have params"
+
+    # Check deployed
+    assert not sql.db.is_deployed(), "Deep undeployed instance is still deployed"
+
+    # Check fitted
+    assert not sql.db.is_fitted(), "Deep undeployed instance is still fitted"
+
+    # Check empty db
+    with sql.db.connect() as con:
+        df = sql.db.read_sql("SELECT name FROM sqlite_master WHERE type='table'", con)
+        assert df.empty, "DB is not empty after deep undeploy"
