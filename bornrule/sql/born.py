@@ -134,6 +134,7 @@ class BornClassifierSQL:
         with self.db.connect() as con:
             with con.begin():
                 self.db.write_params(con, a=a, b=b, h=h)
+            con.commit()
 
     def fit(self, X, y, sample_weight=None):
         """Fit the classifier according to the training data X, y.
