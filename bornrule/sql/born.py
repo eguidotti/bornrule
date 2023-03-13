@@ -61,8 +61,6 @@ class BornClassifierSQL:
                  field_features="feature", field_classes="class", field_items="item", field_weights="weight",
                  table_corpus="corpus", table_params="params", table_weights="weights"):
 
-        self.default_params = lambda: dict(a=0.5, b=1, h=1)
-
         if isinstance(engine, str):
             engine = create_engine(engine, echo=False)
 
@@ -94,8 +92,10 @@ class BornClassifierSQL:
                 f"to add support for {slug}."
             )
 
+        self._default_params = dict(a=0.5, b=1, h=1)
+
     def get_params(self):
-        """Get parameters.
+        """Get parameters
 
         Returns
         -------
@@ -105,12 +105,12 @@ class BornClassifierSQL:
         """
         with self.db.connect() as con:
             if not self.db.is_params(con):
-                return self.default_params()
+                return self._default_params.copy()
 
             return self.db.read_params(con)
 
     def set_params(self, **kwargs):
-        """Set parameters.
+        """Set parameters
 
         Parameters
         ----------
@@ -121,7 +121,7 @@ class BornClassifierSQL:
         params = self.get_params()
         params.update(kwargs)
 
-        valid = self.default_params().keys()
+        valid = self._default_params.keys()
         invalid = set(params.keys()) - set(valid)
         if invalid:
             raise ValueError(
@@ -150,7 +150,7 @@ class BornClassifierSQL:
                 self.db.write_params(con, **params)
 
     def fit(self, X, y, sample_weight=None):
-        """Fit the classifier according to the training data X, y.
+        """Fit the classifier according to the training data X, y
 
         Parameters
         ----------
@@ -179,7 +179,7 @@ class BornClassifierSQL:
         return self.partial_fit(X, y, sample_weight=sample_weight)
 
     def partial_fit(self, X, y, sample_weight=None):
-        """Incremental fit on a batch of samples.
+        """Incremental fit on a batch of samples
 
         This method is expected to be called several times consecutively on different chunks of a dataset so
         as to implement out-of-core or online learning.
@@ -212,12 +212,12 @@ class BornClassifierSQL:
                 self.db.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
 
                 if not self.db.is_params(con):
-                    self.db.write_params(con, **self.default_params())
+                    self.db.write_params(con, **self._default_params)
 
         return self
 
     def predict(self, X):
-        """Perform classification on the test data X.
+        """Perform classification on the test data X
 
         Parameters
         ----------
@@ -242,7 +242,7 @@ class BornClassifierSQL:
         return classes
 
     def predict_proba(self, X):
-        """Return probability estimates for the test data X.
+        """Return probability estimates for the test data X
 
         Parameters
         ----------
