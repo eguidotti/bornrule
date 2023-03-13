@@ -51,6 +51,29 @@ def test_version():
         f"Required SQLite v3.24.0+ but version {'.'.join(ver)} is provided."
 
 
+def test_get_params():
+    sql = BornClassifierSQL()
+    assert sql.get_params() == dict(a=0.5, b=1, h=1), "Params default have changed"
+
+
+def test_set_params():
+    sql = BornClassifierSQL()
+    sql.set_params(a=99)
+    assert sql.get_params()['a'] == 99, "Params were not set"
+
+
+def test_err_params():
+    sql = BornClassifierSQL()
+    with pytest.raises(ValueError):
+        sql.set_params(wrong=True)
+
+
+def test_fit_predict():
+    sql = BornClassifierSQL()
+    sql.fit(B_train[0:10], y_train[0:10])
+    sql.predict(B_test[0:10])
+
+
 @pytest.mark.parametrize(
     "params, engine", [
         ({"a": 0.5, "b": 1.0, "h": 1.0}, "sqlite:///"),
@@ -61,11 +84,14 @@ def test_sqlite(params, engine):
     skl = BornClassifier()
     sql = BornClassifierSQL(engine=engine)
 
+    # Fit
+    sql.fit(B_train[0:100], y_train[0:100])
+
     # Parameters
     skl.set_params(**params)
     sql.set_params(**params)
 
-    # Fit
+    # Overwrite fit
     skl.fit(X_train, y_train)
     sql.fit(B_train, y_train)
 

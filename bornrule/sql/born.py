@@ -61,6 +61,8 @@ class BornClassifierSQL:
                  field_features="feature", field_classes="class", field_items="item", field_weights="weight",
                  table_corpus="corpus", table_params="params", table_weights="weights"):
 
+        self.default_params = lambda: dict(a=0.5, b=1, h=1)
+
         if isinstance(engine, str):
             engine = create_engine(engine, echo=False)
 
@@ -103,36 +105,49 @@ class BornClassifierSQL:
         """
         with self.db.connect() as con:
             if not self.db.is_params(con):
-                return self._params()
+                return self.default_params()
 
             return self.db.read_params(con)
 
-    def set_params(self, a, b, h):
+    def set_params(self, **kwargs):
         """Set parameters.
 
         Parameters
         ----------
-        a : float
-            Amplitude. Must be strictly positive.
-        b : float
-            Balance. Must be non-negative.
-        h : float
-            Entropy. Must be non-negative.
+        **kwargs
+             Model's hyper-parameters: `a` (>0), `b` (>=0), and `h` (>=0).
 
         """
-        if a <= 0:
-            raise ValueError("The parameter 'a' must be strictly positive.")
+        params = self.get_params()
+        params.update(kwargs)
 
-        if b < 0:
-            raise ValueError("The parameter 'b' must be non-negative.")
+        valid = self.default_params().keys()
+        invalid = set(params.keys()) - set(valid)
+        if invalid:
+            raise ValueError(
+                f"Invalid parameter(s): {', '.join(invalid)}. "
+                f"Valid parameters are: {', '.join(valid)}."
+            )
 
-        if h < 0:
-            raise ValueError("The parameter 'h' must be non-negative.")
+        if params['a'] <= 0:
+            raise ValueError(
+                "The parameter 'a' must be strictly positive."
+            )
+
+        if params['b'] < 0:
+            raise ValueError(
+                "The parameter 'b' must be non-negative."
+            )
+
+        if params['h'] < 0:
+            raise ValueError(
+                "The parameter 'h' must be non-negative."
+            )
 
         with self.db.connect() as con:
             with con.begin():
                 self.db.check_editable(con)
-                self.db.write_params(con, a=a, b=b, h=h)
+                self.db.write_params(con, **params)
 
     def fit(self, X, y, sample_weight=None):
         """Fit the classifier according to the training data X, y.
@@ -197,7 +212,7 @@ class BornClassifierSQL:
                 self.db.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
 
                 if not self.db.is_params(con):
-                    self.db.write_params(con, **self._params())
+                    self.db.write_params(con, **self.default_params())
 
         return self
 
@@ -413,9 +428,3 @@ class BornClassifierSQL:
         df.rename_axis(None, axis=1, inplace=True)
 
         return df
-
-    @staticmethod
-    def _params():
-        """Default hyper-parameters"""
-
-        return dict(a=0.5, b=1, h=1)

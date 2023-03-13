@@ -133,11 +133,20 @@ class Database:
         return con.execute(text(sql), values)
 
     def read_params(self, con):
-        params = con.execute(text(f"SELECT a, b, h FROM {self.table_params}"))
-        values = params.fetchone()
-        keys = params.keys()
+        sql = f"""
+            SELECT * 
+            FROM {self.table_params} 
+            WHERE prefix='{self.prefix}'
+            """
 
-        return dict(zip(keys, values))
+        cursor = con.execute(text(sql))
+        values = cursor.fetchone()
+        keys = cursor.keys()
+
+        params = dict(zip(keys, values))
+        params.pop('prefix')
+
+        return params
 
     def read_sql(self, sql, con):
         cur = con.execute(text(sql) if isinstance(sql, str) else sql)
@@ -146,15 +155,14 @@ class Database:
 
         return pd.DataFrame(data, columns=columns)
 
-    def write_params(self, con, a, b, h):
+    def write_params(self, con, **kwargs):
         if_exists = {
             'if_exists': 'insert_or_replace',
             'conflict': ['prefix'],
-            'replace': ['a', 'b', 'h']
+            'replace': list(kwargs.keys())
         }
 
-        values = [{'a': a, 'b': b, 'h': h, 'prefix': self.prefix}]
-        return self.write(con, table=self.table_params, values=values, **if_exists)
+        return self.write(con, table=self.table_params, values=[dict(prefix=self.prefix, **kwargs)], **if_exists)
 
     def write_corpus(self, con, X, y, sample_weight):
         if_exists = {
