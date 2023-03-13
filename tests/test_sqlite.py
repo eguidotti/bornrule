@@ -47,7 +47,8 @@ B_train = bow(X_train, names=feature_names)
 
 def test_version():
     ver = sqlite3.sqlite_version.split(".")
-    assert int(ver[0]) >= 3 and int(ver[1]) >= 24, f"Required SQLite v3.24.0+ but version {'.'.join(ver)} is provided."
+    assert int(ver[0]) > 3 or (int(ver[0]) == 3 and int(ver[1]) >= 24), \
+        f"Required SQLite v3.24.0+ but version {'.'.join(ver)} is provided."
 
 
 @pytest.mark.parametrize(
