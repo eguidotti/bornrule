@@ -53,37 +53,9 @@ class Database:
     def connect(self):
         return self.engine.connect()
 
-    def exists(self, con, table):
+    @staticmethod
+    def exists(con, table):
         return inspect(con).has_table(table.name)
-
-    def write(self, con, table, values=None, if_exists='fail', **kwargs):
-        assert if_exists in {
-            'fail',
-            'replace',
-            'insert',
-            'insert_or_ignore',
-            'insert_or_replace',
-            'insert_or_sum'
-        }
-
-        if not self.exists(con, table):
-            table.create(con)
-
-        else:
-            if if_exists == 'fail':
-                raise ValueError(
-                    f"Table {table} already exists."
-                )
-
-            if if_exists == 'replace':
-                table.drop(con)
-                table.create(con)
-
-        if values is not None:
-            insert = getattr(self, "insert" if if_exists in ['fail', 'replace'] else if_exists)
-            insert(con, table, values, **kwargs)
-
-        return table
 
     @staticmethod
     def insert(con, table, values):
@@ -154,6 +126,35 @@ class Database:
         columns = cur.keys()
 
         return pd.DataFrame(data, columns=columns)
+
+    def write(self, con, table, values=None, if_exists='fail', **kwargs):
+        assert if_exists in {
+            'fail',
+            'replace',
+            'insert',
+            'insert_or_ignore',
+            'insert_or_replace',
+            'insert_or_sum'
+        }
+
+        if not self.exists(con, table):
+            table.create(con)
+
+        else:
+            if if_exists == 'fail':
+                raise ValueError(
+                    f"Table {table} already exists."
+                )
+
+            if if_exists == 'replace':
+                table.drop(con)
+                table.create(con)
+
+        if values is not None:
+            insert = getattr(self, "insert" if if_exists in ['fail', 'replace'] else if_exists)
+            insert(con, table, values, **kwargs)
+
+        return table
 
     def write_params(self, con, **kwargs):
         if_exists = {
@@ -238,7 +239,7 @@ class Database:
             )
 
         sql = f"""
-            INSERT INTO  {self.table_weights} 
+            INSERT INTO  {self.table_weights} ({self.j}, {self.k}, {self.w})
             {self._sql_WITH(cache=False)} 
             SELECT {self.j}, {self.k}, {self.w} 
             FROM HW_jk
