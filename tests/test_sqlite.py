@@ -6,6 +6,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from bornrule import BornClassifier
 from bornrule.sql import BornClassifierSQL
 
+import sqlite3
+print(sqlite3.sqlite_version)
+
 
 # Convert scipy to list of dict
 def bow(x, names):
