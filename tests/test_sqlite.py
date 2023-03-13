@@ -44,6 +44,9 @@ else:
 B_test = bow(X_test, names=feature_names)
 B_train = bow(X_train, names=feature_names)
 
+# Test engine
+testengine = "sqlite:///test.db"
+
 
 def test_version():
     ver = sqlite3.sqlite_version.split(".")
@@ -59,7 +62,15 @@ def test_get_params():
 def test_set_params():
     sql = BornClassifierSQL()
     sql.set_params(a=99)
-    assert sql.get_params()['a'] == 99, "Params were not set"
+    assert sql.get_params()['a'] == 99, "Params are not set"
+
+    sql1 = BornClassifierSQL(id="test_set_params_1", engine=testengine)
+    sql1.set_params(a=99)
+    assert sql1.get_params() == dict(a=99, b=1, h=1), "Params are not set"
+
+    sql2 = BornClassifierSQL(id="test_set_params_2", engine=testengine)
+    sql2.set_params(b=99)
+    assert sql2.get_params() == dict(a=0.5, b=99, h=1), "Params are not set"
 
 
 def test_err_params():
@@ -71,18 +82,29 @@ def test_err_params():
 def test_fit_predict():
     sql = BornClassifierSQL()
     sql.fit(B_train[0:10], y_train[0:10])
-    sql.predict(B_test[0:10])
+    pred = sql.predict(B_test[0:10])
+
+    sql1 = BornClassifierSQL(id="test_fit_predict_1", engine=testengine)
+    sql1.fit(B_train[0:10], y_train[0:10])
+    pred1 = sql1.predict(B_test[0:10])
+    assert pred1 == pred, "Predictions do not match"
+
+    sql2 = BornClassifierSQL(id="test_fit_predict_2", engine=testengine)
+    sql2.fit(B_train[0:10], y_train[0:10])
+    pred2 = sql2.predict(B_test[0:10])
+    assert pred2 == pred, "Predictions do not match"
 
 
 @pytest.mark.parametrize(
-    "params, engine", [
-        ({"a": 0.5, "b": 1.0, "h": 1.0}, "sqlite:///"),
-        ({"a": 0.7, "b": 0.3, "h": 0.4}, "sqlite:///"),
-        ({"a": 0.7, "b": 0.3, "h": 0.4}, "sqlite:///test.db")
+    "params, id, engine", [
+        ({"a": 0.5, "b": 1.0, "h": 1.0}, "test_sqlite_1", "sqlite:///"),
+        ({"a": 0.7, "b": 0.3, "h": 0.4}, "test_sqlite_2", "sqlite:///"),
+        ({"a": 0.5, "b": 1.0, "h": 1.0}, "test_sqlite_3", "sqlite:///test.db"),
+        ({"a": 0.7, "b": 0.3, "h": 0.4}, "test_sqlite_4", "sqlite:///test.db")
     ])
-def test_sqlite(params, engine):
+def test_sqlite(params, id, engine):
     skl = BornClassifier()
-    sql = BornClassifierSQL(engine=engine)
+    sql = BornClassifierSQL(id=id, engine=engine)
 
     # Fit
     sql.fit(B_train[0:100], y_train[0:100])
@@ -186,7 +208,6 @@ def test_sqlite(params, engine):
     # Deep undeploy
     sql.undeploy(deep=True)
 
-    # Check empty db
+    # Check empty parameters
     with sql.db.connect() as con:
-        df = sql.db.read_sql("SELECT name FROM sqlite_master WHERE type='table'", con)
-        assert df.empty, "DB is not empty after deep undeploy"
+        assert not sql.db.is_params(con), "Parameters are not empty after deep undeploy"

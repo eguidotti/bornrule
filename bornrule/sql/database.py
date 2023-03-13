@@ -12,11 +12,13 @@ class Database:
     SUM = 'SUM'
     POW = 'POW'
 
-    def __init__(self, engine: Engine, prefix, type_features, type_classes,
+    def __init__(self, id, engine,
+                 type_features, type_classes,
                  field_features, field_classes, field_items, field_weights,
                  table_params, table_corpus, table_weights):
 
-        self.prefix = prefix
+        self.id = id
+        self.engine = engine
 
         self.type_features = type_features
         self.type_classes = type_classes
@@ -26,28 +28,23 @@ class Database:
         self.n = self.field_items = field_items
         self.w = self.field_weights = field_weights
 
-        if isinstance(engine, str):
-            self.engine = create_engine(engine, echo=False)
-        else:
-            self.engine = engine
-
         self.table_params = Table(
-            f"{self.prefix}_{table_params}", MetaData(),
-            Column('prefix', String, primary_key=True),
+            table_params, MetaData(),
+            Column('id', String, primary_key=True),
             Column('a', Float, nullable=False),
             Column('b', Float, nullable=False),
             Column('h', Float, nullable=False),
         )
 
         self.table_corpus = Table(
-            f"{self.prefix}_{table_corpus}", MetaData(),
+            f"{self.id}_{table_corpus}", MetaData(),
             Column(self.field_features, self.type_features, primary_key=True),
             Column(self.field_classes, self.type_classes, primary_key=True),
             Column(self.field_weights, Float, nullable=False),
         )
 
         self.table_weights = Table(
-            f"{self.prefix}_{table_weights}", MetaData(),
+            f"{self.id}_{table_weights}", MetaData(),
             Column(self.field_features, self.type_features, primary_key=True),
             Column(self.field_classes, self.type_classes, primary_key=True),
             Column(self.field_weights, Float, nullable=False),
@@ -133,20 +130,23 @@ class Database:
         return con.execute(text(sql), values)
 
     def read_params(self, con):
-        sql = f"""
-            SELECT * 
-            FROM {self.table_params} 
-            WHERE prefix='{self.prefix}'
-            """
+        if self.exists(con, self.table_params):
+            sql = f"""
+                SELECT * 
+                FROM {self.table_params} 
+                WHERE id='{self.id}'
+                """
 
-        cursor = con.execute(text(sql))
-        values = cursor.fetchone()
-        keys = cursor.keys()
+            cursor = con.execute(text(sql))
+            values = cursor.fetchone()
+            keys = cursor.keys()
 
-        params = dict(zip(keys, values))
-        params.pop('prefix')
+            if values:
+                params = dict(zip(keys, values))
+                params.pop('id')
+                return params
 
-        return params
+        return None
 
     def read_sql(self, sql, con):
         cur = con.execute(text(sql) if isinstance(sql, str) else sql)
@@ -158,11 +158,11 @@ class Database:
     def write_params(self, con, **kwargs):
         if_exists = {
             'if_exists': 'insert_or_replace',
-            'conflict': ['prefix'],
+            'conflict': ['id'],
             'replace': list(kwargs.keys())
         }
 
-        return self.write(con, table=self.table_params, values=[dict(prefix=self.prefix, **kwargs)], **if_exists)
+        return self.write(con, table=self.table_params, values=[dict(id=self.id, **kwargs)], **if_exists)
 
     def write_corpus(self, con, X, y, sample_weight):
         if_exists = {
@@ -190,7 +190,7 @@ class Database:
 
     def write_items(self, con, X):
         table = Table(
-            f"{self.prefix}_items_{md5(str(uuid1()).encode()).hexdigest()[:12]}", MetaData(),
+            f"{self.id}_items_{md5(str(uuid1()).encode()).hexdigest()[:12]}", MetaData(),
             Column(self.field_items, Integer, primary_key=True),
             Column(self.field_features, self.type_features, primary_key=True),
             Column(self.field_weights, Float),
@@ -205,23 +205,8 @@ class Database:
 
         return self.write(con, table=table, values=values)
 
-    def write_sample_weight(self, con, sample_weight):
-        table = Table(
-            f"{self.prefix}_sample_weight_{md5(str(uuid1()).encode()).hexdigest()[:12]}", MetaData(),
-            Column(self.field_items, Integer, primary_key=True),
-            Column(self.field_weights, Float),
-            prefixes=["TEMPORARY"],
-        )
-
-        values = [
-            {self.field_items: i, self.field_weights: w}
-            for i, w in enumerate(sample_weight)
-        ]
-
-        return self.write(con, table=table, values=values)
-
     def is_params(self, con):
-        return self.exists(con, self.table_params)
+        return self.read_params(con) is not None
 
     def is_corpus(self, con):
         return self.exists(con, self.table_corpus)
@@ -280,8 +265,13 @@ class Database:
         self.table_weights.drop(con, checkfirst=True)
 
         if deep:
-            self.table_params.drop(con, checkfirst=True)
             self.table_corpus.drop(con, checkfirst=True)
+
+            if self.is_params(con):
+                con.execute(text(f"DELETE FROM {self.table_params} WHERE id='{self.id}'"))
+
+                if con.execute(text(f"SELECT COUNT(*) FROM {self.table_params}")).fetchone()[0] == 0:
+                    self.table_params.drop(con)
 
     def predict(self, con, X):
         cache = self.is_deployed(con)
@@ -297,23 +287,10 @@ class Database:
 
         return self.read_sql(sql, con)
 
-    def explain(self, con, X=None, sample_weight=None):
+    def explain(self, con, X=None):
         cache = self.is_deployed(con)
-
-        if X is None:
-            sql = self._sql_explain(cache)
-
-        else:
-            norm = [sum(v for k, v in x.items()) for x in X]
-
-            if sample_weight is None:
-                X = [{k: v / n for k, v in x.items()} for x, n in zip(X, norm) if n > 0]
-            else:
-                p = 1. / self.read_params(con)['a']
-                X = [{k: pow(w, p) * v / n for k, v in x.items()} for x, n, w in zip(X, norm, sample_weight) if n > 0]
-
-            items = self.write_items(con, X)
-            sql = self._sql_explain(cache, items)
+        items = self.write_items(con, X) if X else None
+        sql = self._sql_explain(cache, items)
 
         return self.read_sql(sql, con)
 
@@ -381,46 +358,18 @@ class Database:
                 {self.k}
             """
 
-        # return f"""
-        #     {self._sql_WITH(cache)},
-        #         X_njk AS ({self._sql_X_njk(items)}),
-        #         X_nk AS ({self._sql_X_nk()}),
-        #         U_nk AS ({self._sql_U_nk()}),
-        #         U_n AS ({self._sql_U_n()}),
-        #         Y_nk AS ({self._sql_Y_nk()}),
-        #         U_njk AS ({self._sql_U_njk(items)}),
-        #         U_nj AS ({self._sql_U_nj()}),
-        #         Y_njk AS ({self._sql_Y_njk()})
-        #     SELECT
-        #         Y_njk.{self.j},
-        #         Y_njk.{self.k},
-        #         {self.SUM}(
-        #             (Y_nk.{self.w} - Y_njk.{self.w})
-        #             {'' if weights is None else f' * {weights}.{self.w}'}
-        #         ) AS {self.w}
-        #     FROM
-        #         Y_njk, Y_nk {'' if weights is None else f', {weights}'}
-        #     WHERE
-        #         Y_njk.{self.n} = Y_nk.{self.n} AND
-        #         Y_njk.{self.k} = Y_nk.{self.k}
-        #         {'' if weights is None else f'AND Y_nk.{self.n} = {weights}.{self.n}'}
-        #     GROUP BY
-        #         Y_njk.{self.j},
-        #         Y_njk.{self.k}
-        #     """
-
     def _sql_WITH(self, cache):
         if cache:
             sql = f"""
                 WITH 
-                    VAL AS ({self._sql_VAL()}),
+                    ABH AS ({self._sql_ABH()}),
                     HW_jk AS (SELECT * FROM {self.table_weights})
                 """
 
         else:
             sql = f"""
                 WITH 
-                    VAL AS ({self._sql_VAL()}),
+                    ABH AS ({self._sql_ABH()}),
                     P_j AS ({self._sql_P_j()}), 
                     P_k AS ({self._sql_P_k()}), 
                     W_jk AS ({self._sql_W_jk()}), 
@@ -433,14 +382,14 @@ class Database:
 
         return sql
 
-    def _sql_VAL(self):
+    def _sql_ABH(self):
         return f"""
             SELECT 
                 a, b, h
             FROM
                 {self.table_params}
             WHERE
-                prefix = '{self.prefix}'
+                id = '{self.id}'
             """
 
     def _sql_LN(self):
@@ -479,11 +428,11 @@ class Database:
                 {self.table_corpus}.{self.j}, 
                 {self.table_corpus}.{self.k}, 
                 {self.table_corpus}.{self.w} 
-                    * {self.POW}(P_k.{self.w}, - VAL.b) 
-                    * {self.POW}(P_j.{self.w}, VAL.b - 1) 
+                    * {self.POW}(P_k.{self.w}, - ABH.b) 
+                    * {self.POW}(P_j.{self.w}, ABH.b - 1) 
                     AS {self.w}
             FROM 
-                {self.table_corpus}, P_j, P_k, VAL
+                {self.table_corpus}, P_j, P_k, ABH
             WHERE 
                 {self.table_corpus}.{self.j} = P_j.{self.j} AND
                 {self.table_corpus}.{self.k} = P_k.{self.k}  
@@ -530,11 +479,11 @@ class Database:
             SELECT 
                 W_jk.{self.j}, 
                 W_jk.{self.k}, 
-                {self.POW}(W_jk.{self.w}, VAL.a) 
-                    * {self.POW}(H_j.{self.w}, VAL.h) 
+                {self.POW}(W_jk.{self.w}, ABH.a) 
+                    * {self.POW}(H_j.{self.w}, ABH.h) 
                     AS {self.w}
             FROM 
-                W_jk, H_j, VAL
+                W_jk, H_j, ABH
             WHERE 
                 W_jk.{self.j} = H_j.{self.j}
             """
@@ -545,9 +494,9 @@ class Database:
                 {items}.{self.n}, 
                 HW_jk.{self.j},
                 HW_jk.{self.k}, 
-                HW_jk.{self.w} * {self.POW}({items}.{self.w}, VAL.a) AS {self.w} 
+                HW_jk.{self.w} * {self.POW}({items}.{self.w}, ABH.a) AS {self.w} 
             FROM 
-                {items}, HW_jk, VAL
+                {items}, HW_jk, ABH
             WHERE 
                 {items}.{self.j} = HW_jk.{self.j}
             """
@@ -569,9 +518,9 @@ class Database:
             SELECT 
                 X_nk.{self.n}, 
                 X_nk.{self.k}, 
-                {self.POW}(X_nk.{self.w}, 1 / VAL.a) AS {self.w} 
+                {self.POW}(X_nk.{self.w}, 1 / ABH.a) AS {self.w} 
             FROM 
-                X_nk, VAL
+                X_nk, ABH
             """
 
     def _sql_U_n(self):
@@ -595,49 +544,4 @@ class Database:
                 U_nk, U_n
             WHERE 
                 U_nk.{self.n} = U_n.{self.n}
-            """
-
-    def _sql_U_njk(self, items):
-        return f"""
-            SELECT 
-                X_nk.{self.n}, 
-                {items}.{self.j}, 
-                X_nk.{self.k}, 
-                {self.POW}(X_nk.{self.w} - COALESCE(X_njk.{self.w}, 0), 1 / VAL.a) AS {self.w} 
-            FROM 
-                X_nk 
-                JOIN {items} ON 
-                    X_nk.{self.n} = {items}.{self.n} 
-                LEFT JOIN X_njk ON 
-                    X_njk.{self.n} = X_nk.{self.n} AND 
-                    X_njk.{self.k} = X_nk.{self.k} AND 
-                    X_njk.{self.j} = {items}.{self.j}  
-                JOIN VAL
-            """
-
-    def _sql_U_nj(self):
-        return f"""
-            SELECT 
-                {self.n}, 
-                {self.j}, 
-                {self.SUM}({self.w}) AS {self.w}
-            FROM 
-                U_njk
-            GROUP BY 
-                {self.n},
-                {self.j}
-            """
-
-    def _sql_Y_njk(self):
-        return f"""
-            SELECT 
-                U_njk.{self.n}, 
-                U_njk.{self.j}, 
-                U_njk.{self.k}, 
-                U_njk.{self.w} / U_nj.{self.w} AS {self.w}
-            FROM 
-                U_njk, U_nj
-            WHERE 
-                U_njk.{self.n} = U_nj.{self.n} AND
-                U_njk.{self.j} = U_nj.{self.j}
             """

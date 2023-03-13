@@ -22,12 +22,11 @@ class BornClassifierSQL:
 
     Parameters
     ----------
+    id : str
+        The model id.
     engine : Engine or str
         [SQLAlchemy engine or connection string](https://docs.sqlalchemy.org/en/14/core/engines.html)
         to connect to the database.
-    prefix : str
-        The prefix to use for the tables in the database.
-        Instances created with different `prefix` are independent from each other.
     type_features : TraversibleType
         [SQLAlchemy type](https://docs.sqlalchemy.org/en/14/core/type_basics.html#generic-camelcase-types)
         of the features.
@@ -57,16 +56,16 @@ class BornClassifierSQL:
 
     """
 
-    def __init__(self, engine='sqlite:///', prefix='bc', type_features=String, type_classes=Integer,
+    def __init__(self, id='id', engine='sqlite:///', type_features=String, type_classes=Integer,
                  field_features="feature", field_classes="class", field_items="item", field_weights="weight",
                  table_corpus="corpus", table_params="params", table_weights="weights"):
 
         if isinstance(engine, str):
-            engine = create_engine(engine, echo=False)
+            engine = create_engine(engine)
 
         kwargs = {
+            'id': id,
             'engine': engine,
-            'prefix': prefix,
             'type_features': type_features,
             'type_classes': type_classes,
             'field_features': field_features,
@@ -81,10 +80,8 @@ class BornClassifierSQL:
         slug = engine.url.get_dialect().name
         if slug == 'sqlite':
             self.db = SQLite(**kwargs)
-
         elif slug == 'postgresql':
             self.db = PostgreSQL(**kwargs)
-
         else:
             raise ValueError(
                 f"Backend {slug} is not implemented yet. Please open an issue at "
@@ -93,6 +90,7 @@ class BornClassifierSQL:
             )
 
         self._default_params = dict(a=0.5, b=1, h=1)
+        self._params = self.get_params()
 
     def get_params(self):
         """Get parameters
@@ -104,10 +102,9 @@ class BornClassifierSQL:
 
         """
         with self.db.connect() as con:
-            if not self.db.is_params(con):
-                return self._default_params.copy()
+            params = self.db.read_params(con)
 
-            return self.db.read_params(con)
+        return params or self._default_params.copy()
 
     def set_params(self, **kwargs):
         """Set parameters
@@ -148,6 +145,7 @@ class BornClassifierSQL:
             with con.begin():
                 self.db.check_editable(con)
                 self.db.write_params(con, **params)
+                self._params = params
 
     def fit(self, X, y, sample_weight=None):
         """Fit the classifier according to the training data X, y
@@ -307,10 +305,16 @@ class BornClassifierSQL:
         """
         if X is not None:
             self._validate(X=X, sample_weight=sample_weight)
+            norm = [sum(v for k, v in x.items()) for x in X]
+            if sample_weight is None:
+                X = [{k: v / n for k, v in x.items()} for x, n in zip(X, norm) if n > 0]
+            else:
+                p = 1. / self._params['a']
+                X = [{k: pow(w, p) * v / n for k, v in x.items()} for x, n, w in zip(X, norm, sample_weight) if n > 0]
 
         with self.db.connect() as con:
             self.db.check_fitted(con)
-            W = self.db.explain(con, X=X, sample_weight=sample_weight)
+            W = self.db.explain(con, X=X)
 
         return self._pivot(W, index=self.db.j, columns=self.db.k, values=self.db.w)
 
@@ -346,6 +350,9 @@ class BornClassifierSQL:
         with self.db.connect() as con:
             with con.begin():
                 self.db.undeploy(con, deep=deep)
+
+        if deep:
+            self._params = self.get_params()
 
     def is_fitted(self):
         """Is fitted?
