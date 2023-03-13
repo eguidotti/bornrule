@@ -1,13 +1,11 @@
 import pytest
+import sqlite3
 import numpy as np
 import pandas as pd
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import TfidfVectorizer
 from bornrule import BornClassifier
 from bornrule.sql import BornClassifierSQL
-
-import sqlite3
-print(sqlite3.sqlite_version)
 
 
 # Convert scipy to list of dict
@@ -45,6 +43,11 @@ else:
 # Transform to bow
 B_test = bow(X_test, names=feature_names)
 B_train = bow(X_train, names=feature_names)
+
+
+def test_version():
+    ver = sqlite3.sqlite_version.split(".")
+    assert int(ver[0]) >= 3 and int(ver[1]) >= 24, f"Required SQLite v3.24.0+ but version {'.'.join(ver)} is provided."
 
 
 @pytest.mark.parametrize(
