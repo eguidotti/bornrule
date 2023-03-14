@@ -61,7 +61,7 @@ class Database:
             Column(self.field_weight, Float, nullable=False),
         )
 
-        self.table_temp = lambda *args : Table(
+        self.table_temp = lambda *args: Table(
             f"temp_{md5(str(uuid1()).encode()).hexdigest()[:12]}", MetaData(), *args, prefixes=["TEMPORARY"]
         )
 
@@ -73,48 +73,61 @@ class Database:
         return inspect(con).has_table(table.name)
 
     @staticmethod
-    def insert(con, table, values):
-        keys = values[0].keys()
+    def insert(con, table, values, columns=None):
+        from_select = isinstance(values, str)
+        keys = columns if from_select else values[0].keys()
+        records = values if from_select else f"VALUES(:{', :'.join(keys)})"
+        params = None if from_select else values
         sql = f"""
-            INSERT INTO {table} ({','.join(keys)}) 
-            VALUES(:{', :'.join(keys)})"""
+            INSERT INTO {table} ({','.join(keys)})
+            {records}
+            """
 
-        return con.execute(text(sql), values)
+        return con.execute(text(sql), params)
 
     @staticmethod
-    def insert_or_ignore(con, table, values):
-        keys = values[0].keys()
+    def insert_or_ignore(con, table, values, columns=None):
+        from_select = isinstance(values, str)
+        keys = columns if from_select else values[0].keys()
+        records = values if from_select else f"VALUES(:{', :'.join(keys)})"
+        params = None if from_select else values
         sql = f"""
-            INSERT INTO {table} ({','.join(keys)}) 
-            VALUES(:{', :'.join(keys)}) 
+            INSERT INTO {table} ({','.join(keys)})
+            {records}
             ON CONFLICT DO NOTHING
             """
 
-        return con.execute(text(sql), values)
+        return con.execute(text(sql), params)
 
     @staticmethod
-    def insert_or_replace(con, table, values, conflict, replace):
-        keys = values[0].keys()
+    def insert_or_replace(con, table, values, conflict, replace, columns=None):
+        from_select = isinstance(values, str)
+        keys = columns if from_select else values[0].keys()
+        records = values if from_select else f"VALUES(:{', :'.join(keys)})"
+        params = None if from_select else values
         sql = f"""
-            INSERT INTO {table} ({','.join(keys)}) 
-            VALUES(:{', :'.join(keys)})
+            INSERT INTO {table} ({','.join(keys)})
+            {records}
             ON CONFLICT ({','.join(conflict)})
             DO UPDATE SET ({','.join(replace)}) = (:{', :'.join(replace)})
             """
 
-        return con.execute(text(sql), values)
+        return con.execute(text(sql), params)
 
     @staticmethod
-    def insert_or_sum(con, table, values, conflict, sum):
-        keys = values[0].keys()
+    def insert_or_sum(con, table, values, conflict, sum, columns=None):
+        from_select = isinstance(values, str)
+        keys = columns if from_select else values[0].keys()
+        records = values if from_select else f"VALUES(:{', :'.join(keys)})"
+        params = None if from_select else values
         sql = f"""
-            INSERT INTO {table} ({','.join(keys)}) 
-            VALUES(:{', :'.join(keys)}) 
+            INSERT INTO {table} ({','.join(keys)})
+            {records}
             ON CONFLICT ({','.join(conflict)}) 
             DO UPDATE SET {", ".join([f"{s} = {table}.{s} + excluded.{s}" for s in sum])}
             """
 
-        return con.execute(text(sql), values)
+        return con.execute(text(sql), params)
 
     def read_params(self, con):
         if self.exists(con, self.table_params):
@@ -251,15 +264,12 @@ class Database:
                 "This instance is already deployed. Nothing to do."
             )
 
-        sql = f"""
-            INSERT INTO  {self.table_weights} ({self.j}, {self.k}, {self.w})
-            {self._sql_WITH(cache=False)} 
-            SELECT {self.j}, {self.k}, {self.w} 
-            FROM HW_jk
-            """
-
-        self.write(con, table=self.table_weights)
-        con.execute(text(sql))
+        self.write(
+            con,
+            table=self.table_weights,
+            columns=[self.j, self.k, self.w],
+            values=f"{self._sql_WITH(cache=False)} SELECT {self.j}, {self.k}, {self.w} FROM HW_jk"
+        )
 
         if deep:
             self.table_corpus.drop(con)
