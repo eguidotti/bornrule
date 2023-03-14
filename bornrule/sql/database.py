@@ -61,6 +61,10 @@ class Database:
             Column(self.field_weight, Float, nullable=False),
         )
 
+        self.table_temp = lambda *args : Table(
+            f"temp_{md5(str(uuid1()).encode()).hexdigest()[:12]}", MetaData(), *args, prefixes=["TEMPORARY"]
+        )
+
     def connect(self):
         return self.engine.connect()
 
@@ -201,12 +205,10 @@ class Database:
         return self.write(con, table=self.table_corpus, values=values, **if_exists)
 
     def write_items(self, con, X):
-        table = Table(
-            f"{self.id}_items_{md5(str(uuid1()).encode()).hexdigest()[:12]}", MetaData(),
+        table = self.table_temp(
             Column(self.field_item, Integer, primary_key=True),
             Column(self.field_feature, self.type_feature, primary_key=True),
             Column(self.field_weight, Float),
-            prefixes=["TEMPORARY"],
         )
 
         values = [
