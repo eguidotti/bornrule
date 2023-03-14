@@ -27,19 +27,21 @@ class BornClassifierSQL:
     engine : Engine or str
         [SQLAlchemy engine or connection string](https://docs.sqlalchemy.org/en/14/core/engines.html)
         to connect to the database.
-    type_features : TraversibleType
+    type_feature : TraversibleType
         [SQLAlchemy type](https://docs.sqlalchemy.org/en/14/core/type_basics.html#generic-camelcase-types)
-        of the features.
-    type_classes : TraversibleType
+        of features.
+    type_class : TraversibleType
         [SQLAlchemy type](https://docs.sqlalchemy.org/en/14/core/type_basics.html#generic-camelcase-types)
-        of the classes.
-    field_features : str
+        of classes.
+    field_id : str
+        Label to use for the model ids.
+    field_item : str
+        Label to use for data items.
+    field_feature : str
         Label to use for features.
-    field_classes : str
-       Label to use for classes.
-    field_items : str
-        Label to use for items.
-    field_weights : str
+    field_class : str
+        Label to use for classes.
+    field_weight : str
         Label to use for weights.
     table_corpus : str
          Name of the table containing the corpus.
@@ -56,9 +58,19 @@ class BornClassifierSQL:
 
     """
 
-    def __init__(self, id='id', engine='sqlite:///', type_features=String, type_classes=Integer,
-                 field_features="feature", field_classes="class", field_items="item", field_weights="weight",
-                 table_corpus="corpus", table_params="params", table_weights="weights"):
+    def __init__(self,
+                 id='id',
+                 engine='sqlite:///',
+                 type_feature=String,
+                 type_class=Integer,
+                 field_id="id",
+                 field_item="item",
+                 field_feature="feature",
+                 field_class="class",
+                 field_weight="weight",
+                 table_corpus="corpus",
+                 table_params="params",
+                 table_weights="weights"):
 
         if isinstance(engine, str):
             engine = create_engine(engine)
@@ -66,12 +78,13 @@ class BornClassifierSQL:
         kwargs = {
             'id': id,
             'engine': engine,
-            'type_features': type_features,
-            'type_classes': type_classes,
-            'field_features': field_features,
-            'field_classes': field_classes,
-            'field_items': field_items,
-            'field_weights': field_weights,
+            'type_feature': type_feature,
+            'type_class': type_class,
+            'field_id': field_id,
+            'field_item': field_item,
+            'field_feature': field_feature,
+            'field_class': field_class,
+            'field_weight': field_weight,
             'table_params': table_params,
             'table_corpus': table_corpus,
             'table_weights': table_weights,
@@ -90,7 +103,7 @@ class BornClassifierSQL:
             )
 
         self._default_params = dict(a=0.5, b=1, h=1)
-        self._params = self.get_params()
+        self._params = None
 
     def get_params(self):
         """Get parameters
@@ -101,10 +114,11 @@ class BornClassifierSQL:
             Model's hyper-parameters `a`, `b`, `h`.
 
         """
-        with self.db.connect() as con:
-            params = self.db.read_params(con)
+        if self._params is None:
+            with self.db.connect() as con:
+                self._params = self.db.read_params(con) or self._default_params.copy()
 
-        return params or self._default_params.copy()
+        return self._params
 
     def set_params(self, **kwargs):
         """Set parameters
@@ -309,7 +323,7 @@ class BornClassifierSQL:
             if sample_weight is None:
                 X = [{k: v / n for k, v in x.items()} for x, n in zip(X, norm) if n > 0]
             else:
-                p = 1. / self._params['a']
+                p = 1. / self.get_params()['a']
                 X = [{k: pow(w, p) * v / n for k, v in x.items()} for x, n, w in zip(X, norm, sample_weight) if n > 0]
 
         with self.db.connect() as con:
@@ -352,7 +366,7 @@ class BornClassifierSQL:
                 self.db.undeploy(con, deep=deep)
 
         if deep:
-            self._params = self.get_params()
+            self._params = None
 
     def is_fitted(self):
         """Is fitted?

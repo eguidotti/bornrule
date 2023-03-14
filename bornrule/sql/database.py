@@ -12,25 +12,36 @@ class Database:
     SUM = 'SUM'
     POW = 'POW'
 
-    def __init__(self, id, engine,
-                 type_features, type_classes,
-                 field_features, field_classes, field_items, field_weights,
-                 table_params, table_corpus, table_weights):
+    def __init__(self,
+                 id,
+                 engine,
+                 type_feature,
+                 type_class,
+                 field_id,
+                 field_item,
+                 field_feature,
+                 field_class,
+                 field_weight,
+                 table_params,
+                 table_corpus,
+                 table_weights):
 
-        self.id = id
         self.engine = engine
 
-        self.type_features = type_features
-        self.type_classes = type_classes
+        self.id = id
+        self.field_id = field_id
 
-        self.j = self.field_features = field_features
-        self.k = self.field_classes = field_classes
-        self.n = self.field_items = field_items
-        self.w = self.field_weights = field_weights
+        self.type_feature = type_feature
+        self.type_class = type_class
+
+        self.j = self.field_feature = field_feature
+        self.k = self.field_class = field_class
+        self.n = self.field_item = field_item
+        self.w = self.field_weight = field_weight
 
         self.table_params = Table(
             table_params, MetaData(),
-            Column('id', String, primary_key=True),
+            Column(self.field_id, String, primary_key=True),
             Column('a', Float, nullable=False),
             Column('b', Float, nullable=False),
             Column('h', Float, nullable=False),
@@ -38,16 +49,16 @@ class Database:
 
         self.table_corpus = Table(
             f"{self.id}_{table_corpus}", MetaData(),
-            Column(self.field_features, self.type_features, primary_key=True),
-            Column(self.field_classes, self.type_classes, primary_key=True),
-            Column(self.field_weights, Float, nullable=False),
+            Column(self.field_feature, self.type_feature, primary_key=True),
+            Column(self.field_class, self.type_class, primary_key=True),
+            Column(self.field_weight, Float, nullable=False),
         )
 
         self.table_weights = Table(
             f"{self.id}_{table_weights}", MetaData(),
-            Column(self.field_features, self.type_features, primary_key=True),
-            Column(self.field_classes, self.type_classes, primary_key=True),
-            Column(self.field_weights, Float, nullable=False),
+            Column(self.field_feature, self.type_feature, primary_key=True),
+            Column(self.field_class, self.type_class, primary_key=True),
+            Column(self.field_weight, Float, nullable=False),
         )
 
     def connect(self):
@@ -106,7 +117,7 @@ class Database:
             sql = f"""
                 SELECT * 
                 FROM {self.table_params} 
-                WHERE id='{self.id}'
+                WHERE {self.field_id}='{self.id}'
                 """
 
             cursor = con.execute(text(sql))
@@ -115,7 +126,7 @@ class Database:
 
             if values:
                 params = dict(zip(keys, values))
-                params.pop('id')
+                params.pop(self.field_id)
                 return params
 
         return None
@@ -159,17 +170,17 @@ class Database:
     def write_params(self, con, **kwargs):
         if_exists = {
             'if_exists': 'insert_or_replace',
-            'conflict': ['id'],
+            'conflict': [self.field_id],
             'replace': list(kwargs.keys())
         }
 
-        return self.write(con, table=self.table_params, values=[dict(id=self.id, **kwargs)], **if_exists)
+        return self.write(con, table=self.table_params, values=[{self.field_id: self.id, **kwargs}], **if_exists)
 
     def write_corpus(self, con, X, y, sample_weight):
         if_exists = {
             'if_exists': 'insert_or_sum',
-            'conflict': [self.field_classes, self.field_features],
-            'sum': [self.field_weights]
+            'conflict': [self.field_class, self.field_feature],
+            'sum': [self.field_weight]
         }
 
         corpus = defaultdict(lambda: defaultdict(int))
@@ -185,21 +196,21 @@ class Database:
         values = []
         for c, d in corpus.items():
             for f, w in d.items():
-                values.append({self.field_features: f, self.field_classes: c, self.field_weights: w})
+                values.append({self.field_feature: f, self.field_class: c, self.field_weight: w})
 
         return self.write(con, table=self.table_corpus, values=values, **if_exists)
 
     def write_items(self, con, X):
         table = Table(
             f"{self.id}_items_{md5(str(uuid1()).encode()).hexdigest()[:12]}", MetaData(),
-            Column(self.field_items, Integer, primary_key=True),
-            Column(self.field_features, self.type_features, primary_key=True),
-            Column(self.field_weights, Float),
+            Column(self.field_item, Integer, primary_key=True),
+            Column(self.field_feature, self.type_feature, primary_key=True),
+            Column(self.field_weight, Float),
             prefixes=["TEMPORARY"],
         )
 
         values = [
-            {self.field_items: i, self.field_features: f, self.field_weights: w}
+            {self.field_item: i, self.field_feature: f, self.field_weight: w}
             for i, x in enumerate(X)
             for f, w in x.items()
         ]
@@ -269,7 +280,7 @@ class Database:
             self.table_corpus.drop(con, checkfirst=True)
 
             if self.is_params(con):
-                con.execute(text(f"DELETE FROM {self.table_params} WHERE id='{self.id}'"))
+                con.execute(text(f"DELETE FROM {self.table_params} WHERE {self.field_id}='{self.id}'"))
 
                 if con.execute(text(f"SELECT COUNT(*) FROM {self.table_params}")).fetchone()[0] == 0:
                     self.table_params.drop(con)
@@ -390,13 +401,17 @@ class Database:
             FROM
                 {self.table_params}
             WHERE
-                id = '{self.id}'
+                {self.field_id} = '{self.id}'
             """
 
     def _sql_LN(self):
         return f"""
             SELECT 
-                {self.LOG}(COUNT(*)) AS {self.w}
+                CASE 
+                    WHEN COUNT(*) > 1 
+                    THEN {self.LOG}(COUNT(*))
+                    ELSE 1
+                END AS {self.w}
             FROM 
                 P_k
             """

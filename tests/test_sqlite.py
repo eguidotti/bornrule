@@ -95,12 +95,19 @@ def test_fit_predict():
     assert pred2 == pred, "Predictions do not match"
 
 
+def test_predict():
+    sql = BornClassifierSQL()
+    sql.fit(B_train[0:10], [1] * 10)
+    pred = sql.predict(B_test[0:10])
+    assert all([p == 1 for p in pred]), "Broken predictions when the model is fitted with only one class"
+
+
 @pytest.mark.parametrize(
     "params, id, engine", [
         ({"a": 0.5, "b": 1.0, "h": 1.0}, "test_sqlite_1", "sqlite:///"),
         ({"a": 0.7, "b": 0.3, "h": 0.4}, "test_sqlite_2", "sqlite:///"),
-        ({"a": 0.5, "b": 1.0, "h": 1.0}, "test_sqlite_3", "sqlite:///test.db"),
-        ({"a": 0.7, "b": 0.3, "h": 0.4}, "test_sqlite_4", "sqlite:///test.db")
+        ({"a": 0.5, "b": 1.0, "h": 1.0}, "test_sqlite_3", testengine),
+        ({"a": 0.7, "b": 0.3, "h": 0.4}, "test_sqlite_4", testengine)
     ])
 def test_sqlite(params, id, engine):
     skl = BornClassifier()
