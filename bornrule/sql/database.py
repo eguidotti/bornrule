@@ -159,6 +159,7 @@ class Database:
         assert if_exists in {
             'fail',
             'replace',
+            'ignore',
             'insert',
             'insert_or_ignore',
             'insert_or_replace',
@@ -178,8 +179,11 @@ class Database:
                 table.drop(con)
                 table.create(con)
 
+            if if_exists == 'ignore':
+                values = None
+
         if values is not None:
-            insert = getattr(self, "insert" if if_exists in ['fail', 'replace'] else if_exists)
+            insert = getattr(self, "insert" if if_exists in ['fail', 'replace', 'ignore'] else if_exists)
             insert(con, table, values, **kwargs)
 
         return table
