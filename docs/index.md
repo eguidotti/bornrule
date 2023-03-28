@@ -14,7 +14,7 @@
     src="https://upload.wikimedia.org/wikipedia/en/thumb/0/08/Logo_for_Conference_on_Neural_Information_Processing_Systems.svg/1200px-Logo_for_Conference_on_Neural_Information_Processing_Systems.svg.png" 
 />
 
-This website contains the documentation for the package `bornrule` available on [PyPI](https://pypi.org/project/bornrule/). The package implements the classifier proposed in the paper [Text Classification with Born's Rule](https://proceedings.neurips.cc/paper_files/paper/2022/file/c88d0c9bea6230b518ce71268c8e49e0-Paper-Conference.pdf). All code is available at the [GitHub repository](https://github.com/eguidotti/bornrule). 
+This website contains the documentation for the package `bornrule` available on [PyPI](https://pypi.org/project/bornrule/). The package implements the classifier proposed in the paper [Text Classification with Born's Rule](https://proceedings.neurips.cc/paper_files/paper/2022/hash/c88d0c9bea6230b518ce71268c8e49e0-Abstract-Conference.html). All code is available at the [GitHub repository](https://github.com/eguidotti/bornrule). 
 
 ## Installation
 
