@@ -1,22 +1,18 @@
 # Classification with Born's Rule
 
-<img src="https://upload.wikimedia.org/wikipedia/en/thumb/0/08/Logo_for_Conference_on_Neural_Information_Processing_Systems.svg/1200px-Logo_for_Conference_on_Neural_Information_Processing_Systems.svg.png" align="right" height="128"/>This repository implements the classifier proposed in:
-
-> Emanuele Guidotti and Alfio Ferrara. Text Classification with Born’s Rule. *Advances in Neural Information Processing Systems*, 2022.
-
-<div align="center">
-  [<a href="https://openreview.net/pdf?id=sNcn-E3uPHA">Paper</a>] -
-  [<a href="https://nips.cc/media/PosterPDFs/NeurIPS%202022/8d7628dd7a710c8638dbd22d4421ee46.png">Poster</a>] - 
-  [<a href="https://bornrule.eguidotti.com">Docs</a>]
-</div>
+<img src="https://upload.wikimedia.org/wikipedia/en/thumb/0/08/Logo_for_Conference_on_Neural_Information_Processing_Systems.svg/1200px-Logo_for_Conference_on_Neural_Information_Processing_Systems.svg.png" align="right" height="128"/>This repository contains the code for the paper [Text Classification with Born's Rule](https://proceedings.neurips.cc/paper_files/paper/2022/hash/c88d0c9bea6230b518ce71268c8e49e0-Abstract-Conference.html). The classifier is implemented in python and available on [PyPI](https://pypi.org/project/bornrule/). The documentation is available [here](https://bornrule.eguidotti.com).
 
 ## Installation
+
+Install via `pip` with:
 
 ```bash
 pip install bornrule
 ```
 
 ## Usage
+
+The package implements three versions of the classifier. The classification algorithm is compatible with the [scikit-learn](https://scikit-learn.org/) ecosystem. The neural version is compatible with [pytorch](https://pytorch.org/). The SQL version supports in-database classification.
 
 ### Scikit-Learn
 
@@ -26,7 +22,6 @@ from bornrule import BornClassifier
 
 - Use it as any other `sklearn` classifier
 - Supports both dense and sparse input and GPU-accelerated computing via `cupy`
-- Documentation available [here](https://bornrule.eguidotti.com/sklearn/)
 
 ### PyTorch
 
@@ -36,7 +31,6 @@ from bornrule.torch import Born
 
 - Use it as any other `torch` layer
 - Supports real and complex-valued inputs. Outputs probabilities in the range [0, 1]
-- Documentation available [here](https://bornrule.eguidotti.com/pytorch/)
 
 ### SQL
 
@@ -44,9 +38,8 @@ from bornrule.torch import Born
 from bornrule.sql import BornClassifierSQL
 ```
 
-- Use it for in-database classification
+- Equivalent to the class  `BornClassifier`  but for in-database classification
 - Supports inputs represented as json `{feature: value, ...}`
-- Documentation available [here](https://bornrule.eguidotti.com/sql/)
 
 ## Paper replication
 
@@ -85,14 +78,18 @@ The script generates a folder named `results` with all the results in the paper.
 
 ## Cite as
 
+>Emanuele Guidotti and Alfio Ferrara. Text Classification with Born's Rule. In *Advances in Neural Information Processing Systems*, volume 35, pages 30990–31001, 2022.
+
+A BibTeX entry for LaTeX users is:
+
 ```bibtex
 @inproceedings{guidotti2022text,
-  title={Text Classification with Born's Rule},
-  author={Emanuele Guidotti and Alfio Ferrara},
-  booktitle={Advances in Neural Information Processing Systems},
-  editor={Alice H. Oh and Alekh Agarwal and Danielle Belgrave and Kyunghyun Cho},
-  year={2022},
-  url={https://openreview.net/forum?id=sNcn-E3uPHA}
+ title = {Text Classification with Born's Rule},
+ author = {Guidotti, Emanuele and Ferrara, Alfio},
+ booktitle = {Advances in Neural Information Processing Systems},
+ pages = {30990--31001}, 
+ volume = {35},
+ year = {2022}
 }
 ```
 
