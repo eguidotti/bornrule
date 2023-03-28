@@ -61,14 +61,13 @@ class Born(torch.nn.Module):
         self.weight = torch.nn.Parameter(weight)
         
     def forward(self, x):
-        r"""Applies the following transformation to the incoming data:
+        r"""Applies the following transformation to each input sample:
 
         ```math
-        y = \dfrac{\operatorname{Mod}(xW)^2}{|| \operatorname{Mod}(xW)^2 ||_1}
+        y_k = \dfrac{\operatorname{Mod}(\sum_j W_{jk}x_j)^2}{\sum_k \operatorname{Mod}(\sum_j W_{jk}x_j)^2}
         ```
 
-        where $`\operatorname{Mod}`$ is the modulus of complex numbers,
-        and $`||\cdot||_1`$ is the L1-norm of a vector.
+        where $`\operatorname{Mod}`$ is the modulus of complex numbers.
 
         Parameters
         ----------
