@@ -312,7 +312,7 @@ class Database:
                     self.table_params.drop(con)
 
     def partial_fit(self, con, X, y, sample_weight):
-        self.db.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
+        self.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
         if not self.is_params(con):
             self.write_params(con, **self.default_params)
 
