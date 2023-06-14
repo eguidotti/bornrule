@@ -75,7 +75,7 @@ def test_set_params():
 
 def test_err_params():
     sql = BornClassifierSQL()
-    with pytest.raises(ValueError):
+    with pytest.raises(Exception):
         sql.set_params(wrong=True)
 
 

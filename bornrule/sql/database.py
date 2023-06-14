@@ -194,14 +194,14 @@ class Database:
 
         return table
 
-    def write_params(self, con, **kwargs):
+    def write_params(self, con, **params):
         if_exists = {
             'if_exists': 'insert_or_replace',
             'conflict': [self.field_id],
-            'replace': list(kwargs.keys())
+            'replace': list(params.keys())
         }
 
-        return self.write(con, table=self.table_params, values=[{self.field_id: self.id, **kwargs}], **if_exists)
+        return self.write(con, table=self.table_params, values=[{self.field_id: self.id, **params}], **if_exists)
 
     def write_corpus(self, con, X, y, sample_weight):
         if_exists = {
