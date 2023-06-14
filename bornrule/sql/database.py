@@ -39,6 +39,12 @@ class Database:
         self.n = self.field_item = field_item
         self.w = self.field_weight = field_weight
 
+        self.default_params = {
+            'a': 0.5,
+            'b': 1,
+            'h': 1,
+        }
+
         self.table_params = Table(
             table_params, MetaData(),
             Column(self.field_id, String, primary_key=True),
@@ -146,7 +152,7 @@ class Database:
                 params.pop(self.field_id)
                 return params
 
-        return None
+        return self.default_params
 
     def read_sql(self, sql, con):
         cur = con.execute(text(sql) if isinstance(sql, str) else sql)
@@ -204,6 +210,9 @@ class Database:
             'sum': [self.field_weight]
         }
 
+        if sample_weight is None:
+            sample_weight = [1] * len(X)
+
         corpus = defaultdict(lambda: defaultdict(int))
         for x, y, w in zip(X, y, sample_weight):
             if not isinstance(y, dict):
@@ -237,7 +246,8 @@ class Database:
         return self.write(con, table=table, values=values)
 
     def is_params(self, con):
-        return self.read_params(con) is not None
+        sql = f"SELECT COUNT(*) FROM {self.table_params} WHERE {self.field_id}='{self.id}'"
+        return self.exists(con, self.table_params) and con.execute(text(sql)).fetchone()[0]
 
     def is_corpus(self, con):
         return self.exists(con, self.table_corpus)
@@ -300,6 +310,11 @@ class Database:
 
                 if con.execute(text(f"SELECT COUNT(*) FROM {self.table_params}")).fetchone()[0] == 0:
                     self.table_params.drop(con)
+
+    def partial_fit(self, con, X, y, sample_weight):
+        self.db.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
+        if not self.is_params(con):
+            self.write_params(con, **self.default_params)
 
     def predict(self, con, X):
         cache = self.is_deployed(con)

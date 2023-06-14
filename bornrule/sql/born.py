@@ -102,8 +102,7 @@ class BornClassifierSQL:
                 f"to add support for {slug}."
             )
 
-        self._default_params = dict(a=0.5, b=1, h=1)
-        self._params = None
+        self.params = None
 
     def get_params(self):
         """Get parameters
@@ -114,11 +113,11 @@ class BornClassifierSQL:
             Model's hyper-parameters `a`, `b`, `h`.
 
         """
-        if self._params is None:
+        if self.params is None:
             with self.db.connect() as con:
-                self._params = self.db.read_params(con) or self._default_params.copy()
+                self.params = self.db.read_params(con)
 
-        return self._params
+        return self.params
 
     def set_params(self, **kwargs):
         """Set parameters
@@ -132,7 +131,7 @@ class BornClassifierSQL:
         params = self.get_params()
         params.update(kwargs)
 
-        valid = self._default_params.keys()
+        valid = self.db.default_params.keys()
         invalid = set(params.keys()) - set(valid)
         if invalid:
             raise ValueError(
@@ -159,7 +158,7 @@ class BornClassifierSQL:
             with con.begin():
                 self.db.check_editable(con)
                 self.db.write_params(con, **params)
-                self._params = params
+                self.params = params
 
     def fit(self, X, y, sample_weight=None):
         """Fit the classifier according to the training data X, y
@@ -215,16 +214,10 @@ class BornClassifierSQL:
         """
         self._validate(X=X, y=y, sample_weight=sample_weight)
 
-        if sample_weight is None:
-            sample_weight = [1] * len(X)
-
         with self.db.connect() as con:
             with con.begin():
                 self.db.check_editable(con)
-                self.db.write_corpus(con, X=X, y=y, sample_weight=sample_weight)
-
-                if not self.db.is_params(con):
-                    self.db.write_params(con, **self._default_params)
+                self.db.partial_fit(con, X=X, y=y, sample_weight=sample_weight)
 
         return self
 
@@ -366,7 +359,7 @@ class BornClassifierSQL:
                 self.db.undeploy(con, deep=deep)
 
         if deep:
-            self._params = None
+            self.params = None
 
     def is_fitted(self):
         """Is fitted?
