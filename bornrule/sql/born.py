@@ -6,7 +6,7 @@ try:
 except ModuleNotFoundError:
     raise ModuleNotFoundError(
         "SQLAlchemy required but not installed. "
-        "Please install SQLAlchemy with: pip install sqlalchemy")
+        "Please install SQLAlchemy with e.g. -> pip install sqlalchemy")
 
 from .sqlite import SQLite
 from .postgresql import PostgreSQL
