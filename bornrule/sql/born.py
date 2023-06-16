@@ -117,39 +117,31 @@ class BornClassifierSQL:
             with self.db.connect() as con:
                 self.params = self.db.read_params(con)
 
-        return self.params
+        return self.params.copy()
 
-    def set_params(self, **kwargs):
+    def set_params(self, **params):
         """Set parameters
 
         Parameters
         ----------
-        **kwargs
+        **params
              Model's hyper-parameters: `a` (>0), `b` (>=0), and `h` (>=0).
 
         """
-        params = self.get_params()
-        params.update(kwargs)
+        p = self.get_params()
+        p.update(params)
 
-        valid = self.db.default_params.keys()
-        invalid = set(params.keys()) - set(valid)
-        if invalid:
-            raise ValueError(
-                f"Invalid parameter(s): {', '.join(invalid)}. "
-                f"Valid parameters are: {', '.join(valid)}."
-            )
-
-        if params['a'] <= 0:
+        if p['a'] <= 0:
             raise ValueError(
                 "The parameter 'a' must be strictly positive."
             )
 
-        if params['b'] < 0:
+        if p['b'] < 0:
             raise ValueError(
                 "The parameter 'b' must be non-negative."
             )
 
-        if params['h'] < 0:
+        if p['h'] < 0:
             raise ValueError(
                 "The parameter 'h' must be non-negative."
             )
@@ -157,8 +149,8 @@ class BornClassifierSQL:
         with self.db.connect() as con:
             with con.begin():
                 self.db.check_editable(con)
-                self.db.write_params(con, **params)
-                self.params = params
+                self.db.write_params(con, **p)
+                self.params = p
 
     def fit(self, X, y, sample_weight=None):
         """Fit the classifier according to the training data X, y
