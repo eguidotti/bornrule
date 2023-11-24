@@ -77,8 +77,11 @@ def test_explain_multiple(classifier, nitems):
     # Explain multiple items
     E1 = classifier.explain(X_test[0:nitems])
 
-    # Sum weights of single-item explanation
-    E2 = sum([classifier.explain(X_test[i]) for i in range(0, nitems)])
+    # Explain average item
+    E2 = classifier.explain(
+        sum([X_test[i] / X_test[i].sum() for i in range(0, nitems)]), 
+        sample_weight=[nitems]
+    )
 
     # Check explanations
     assert np.allclose(E1.todense(), E2.todense()), f"Explanation does not match"
@@ -97,8 +100,11 @@ def test_explain_weights(classifier, nitems):
     # Explain multiple items with sample_weight
     E1 = classifier.explain(X_test[0:nitems], sample_weight=sample_weight)
 
-    # Sum weights of single-item explanation
-    E2 = sum([sample_weight[i] * classifier.explain(X_test[i]) for i in range(0, nitems)])
+    # Explain average item
+    E2 = classifier.explain(
+        sum([sample_weight[i] * X_test[i] / X_test[i].sum() for i in range(0, nitems)]), 
+        sample_weight=[sum(sample_weight)]
+    )
 
     # Check explanations
     assert np.allclose(E1.todense(), E2.todense()), f"Explanation does not match"
