@@ -87,12 +87,12 @@ def test_fit_predict():
     sql1 = BornClassifierSQL(id="test_fit_predict_1", engine=testengine)
     sql1.fit(B_train[0:10], y_train[0:10])
     pred1 = sql1.predict(B_test[0:10])
-    assert pred1 == pred, "Predictions do not match"
+    assert pred1.equals(pred), "Predictions do not match"
 
     sql2 = BornClassifierSQL(id="test_fit_predict_2", engine=testengine)
     sql2.fit(B_train[0:10], y_train[0:10])
     pred2 = sql2.predict(B_test[0:10])
-    assert pred2 == pred, "Predictions do not match"
+    assert pred2.equals(pred), "Predictions do not match"
 
 
 def test_predict():
