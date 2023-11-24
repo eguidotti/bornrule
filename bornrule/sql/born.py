@@ -1,4 +1,6 @@
 import pandas as pd
+from collections import defaultdict
+from schema import Schema, Or
 
 try:
     from sqlalchemy import create_engine, String, Integer
@@ -19,6 +21,15 @@ class BornClassifierSQL:
     Data items are to be passed as list of dictionaries in the format `[{feature: value, ...}, ...]`.
     This classifier is suitable for classification with non-negative feature values.
     The values are treated as unnormalized probability distributions.
+    If provided, configurations must be structured as follows:
+        {
+            'class': (table, item, field) OR 'SELECT item, class, weight',
+            'features': [
+                (table, item, field) OR 'SELECT item, feature, weight',
+                (table, item, field) OR 'SELECT item, feature, weight',
+                ...
+            ]
+        }
 
     Parameters
     ----------
@@ -27,6 +38,8 @@ class BornClassifierSQL:
     engine : Engine or str
         [SQLAlchemy engine or connection string](https://docs.sqlalchemy.org/en/14/core/engines.html)
         to connect to the database.
+    configs: dict
+        Database configurations.
     type_feature : TraversibleType
         [SQLAlchemy type](https://docs.sqlalchemy.org/en/14/core/type_basics.html#generic-camelcase-types)
         of features.
@@ -59,8 +72,9 @@ class BornClassifierSQL:
     """
 
     def __init__(self,
-                 id='id',
+                 id='model',
                  engine='sqlite:///',
+                 configs=None,
                  type_feature=String,
                  type_class=Integer,
                  field_id="id",
@@ -71,6 +85,10 @@ class BornClassifierSQL:
                  table_corpus="corpus",
                  table_params="params",
                  table_weights="weights"):
+
+        self.configs = configs
+        if configs is not None:
+            Schema({'class': Or(tuple, str), 'features': [Or(tuple, str)]}).validate(configs)
 
         if isinstance(engine, str):
             engine = create_engine(engine)
@@ -204,11 +222,10 @@ class BornClassifierSQL:
             Returns the instance itself.
 
         """
-        self._validate(X=X, y=y, sample_weight=sample_weight)
+        X, y = self._validate(X=X, y=y, sample_weight=sample_weight)
 
         with self.db.connect() as con:
             with con.begin():
-                self.db.check_editable(con)
                 self.db.partial_fit(con, X=X, y=y, sample_weight=sample_weight)
 
         return self
@@ -223,20 +240,17 @@ class BornClassifierSQL:
 
         Returns
         -------
-        y : list of length n_samples
+        y : Series of shape (n_samples, )
             Predicted target classes for `X`.
 
         """
-        self._validate(X=X)
+        X = self._validate(X=X)
 
         with self.db.connect() as con:
             self.db.check_fitted(con)
             classes = self.db.predict(con, X=X)
 
-        classes = dict(zip(classes[self.db.n], classes[self.db.k]))
-        classes = [classes[i] if i in classes else None for i in range(len(X))]
-
-        return classes
+        return self._pivot(classes, index=self.db.n, values=self.db.k, X=X)
 
     def predict_proba(self, X):
         """Return probability estimates for the test data X
@@ -252,16 +266,13 @@ class BornClassifierSQL:
             Returns the probability of the samples for each class in the model.
 
         """
-        self._validate(X=X)
+        X = self._validate(X=X)
 
         with self.db.connect() as con:
             self.db.check_fitted(con)
             proba = self.db.predict_proba(con, X=X)
 
-        proba = self._pivot(proba, index=self.db.n, columns=self.db.k, values=self.db.w)
-        proba = proba.reindex(range(len(X))).sparse.to_dense()
-
-        return proba
+        return self._pivot(proba, index=self.db.n, columns=self.db.k, values=self.db.w, X=X)
 
     def explain(self, X=None, sample_weight=None):
         r"""Global and local explanation
@@ -303,17 +314,24 @@ class BornClassifierSQL:
 
         """
         if X is not None:
-            self._validate(X=X, sample_weight=sample_weight)
-            norm = [sum(v for k, v in x.items()) for x in X]
-            if sample_weight is None:
-                X = [{k: v / n for k, v in x.items()} for x, n in zip(X, norm) if n > 0]
-            else:
-                p = 1. / self.get_params()['a']
-                X = [{k: pow(w, p) * v / n for k, v in x.items()} for x, n, w in zip(X, norm, sample_weight) if n > 0]
+            X = self._validate(X=X, sample_weight=sample_weight)
+            if isinstance(X, list):
+                Z = defaultdict(int)
+     
+                if sample_weight is None:
+                    sample_weight = [1] * len(X)
+
+                for x, w in zip(X, sample_weight):
+                    n = sum(x.values())
+                    if n != 0:
+                        for f, v in x.items():
+                            Z[f] += w * v / n
+                
+                X, sample_weight = [Z], 'norm'
 
         with self.db.connect() as con:
             self.db.check_fitted(con)
-            W = self.db.explain(con, X=X)
+            W = self.db.explain(con, X=X, sample_weight=sample_weight)
 
         return self._pivot(W, index=self.db.j, columns=self.db.k, values=self.db.w)
 
@@ -326,7 +344,7 @@ class BornClassifierSQL:
         Parameters
         ----------
         deep : bool
-            Whether the corpus is dropped. Saves space but makes impossible to update the model.
+            Whether the corpus is dropped.
 
         """
         with self.db.connect() as con:
@@ -352,6 +370,22 @@ class BornClassifierSQL:
 
         if deep:
             self.params = None
+
+    def redeploy(self, deep=False):
+        """Redeploy the instance
+
+        Undeploy and deploy the instance again. Useful to update the weights in a single transaction.
+
+        Parameters
+        ----------
+        deep : bool
+            Whether the corpus is dropped.
+
+        """
+        with self.db.connect() as con:
+            with con.begin():
+                self.db.undeploy(con, deep=False)
+                self.db.deploy(con, deep=deep)
 
     def is_fitted(self):
         """Is fitted?
@@ -381,11 +415,14 @@ class BornClassifierSQL:
         with self.db.connect() as con:
             return self.db.is_deployed(con)
 
-    @staticmethod
-    def _validate(X, y="no_validation", sample_weight=None):
+    def _validate(self, X, y="no_validation", sample_weight=None):
         """Input validation"""
 
         only_X = isinstance(y, str) and y == "no_validation"
+
+        if (isinstance(X, str) or X is None) and (only_X or y is None):            
+            X = dict(self.configs, where=X)
+            return X if only_X else (X, y)
 
         if not isinstance(X, list):
             raise ValueError(
@@ -410,27 +447,29 @@ class BornClassifierSQL:
                     "Dimension mismatch. X and sample_weight must have the same length"
                 )
 
-            for i, value in enumerate(sample_weight):
-                if value < 0:
-                    raise ValueError(
-                        f"Element {i} of sample_weight contains negative values"
-                    )
-
         if not only_X:
             if len(X) != len(y):
                 raise ValueError(
                     "Dimension mismatch. X and y must have the same length"
                 )
+            
+        return X if only_X else (X, y)
 
     @staticmethod
-    def _pivot(df, index, columns, values):
-        """Pivot table"""
+    def _pivot(df, index, values, columns=None, X=None):
+        """Pivot table and clear axis"""
 
-        df[values] = df[values].astype(pd.SparseDtype(float))
-        df = df.pivot(index=index, columns=columns, values=values)
-        df = df.astype(pd.SparseDtype(float, fill_value=0))
+        if columns is not None:
+            df[values] = df[values].astype(pd.SparseDtype(float))
+            df = df.pivot(index=index, columns=columns, values=values)
+            df = df.astype(pd.SparseDtype(float, fill_value=0))
+            df.rename_axis(None, axis=0, inplace=True)
+            df.rename_axis(None, axis=1, inplace=True)
 
-        df.rename_axis(None, axis=0, inplace=True)
-        df.rename_axis(None, axis=1, inplace=True)
+        if columns is None:
+            df = pd.Series(data=df[values].values, index=df[index].values)
+
+        if X is not None:
+            df = df.reindex(range(len(X)) if isinstance(X, list) else None)
 
         return df
