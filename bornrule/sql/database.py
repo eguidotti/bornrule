@@ -737,7 +737,7 @@ class Database:
                 WHERE 
                     X_nj.{self.j} = HW_jk.{self.j}
                 GROUP BY
-                    {self.n}, {self.k}
+                    {self.n}, {self.k}, ABH.a
             )
             """
 
