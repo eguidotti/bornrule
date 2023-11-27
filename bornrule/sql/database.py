@@ -2,7 +2,7 @@ import pandas as pd
 from uuid import uuid1
 from hashlib import md5
 from collections import defaultdict
-from sqlalchemy import inspect, text, MetaData, Table, Column, Integer, Float, String, Text
+from sqlalchemy import inspect, text, MetaData, Table, Column, Integer, Float, String
 
 
 class Database:
@@ -353,7 +353,7 @@ class Database:
     
     def _sql_transform(self, items, concat, name):
         if isinstance(items, str):
-            return items, self.n
+            return items
         
         table, item, field = items
         if concat:
@@ -361,7 +361,7 @@ class Database:
             if self.CONCAT_FUN:
                 field = f"{self.CONCAT_FUN}({field})"
 
-        select = f"""
+        return f"""
             SELECT 
                 {item} AS {self.n}, 
                 {field} AS {name}, 
@@ -370,8 +370,6 @@ class Database:
                 {table}
             """
         
-        return select, item
-
     def _sql_partial_fit(self, items, sample_weight):
         return f"""
             WITH
@@ -379,7 +377,6 @@ class Database:
                 {self._sql_C_nk(items)},
                 {self._sql_X_n()},
                 {self._sql_C_n()},
-                {self._sql_S_n(sample_weight)},
                 {self._sql_Z_nj(sample_weight)},
                 {self._sql_Y_nk()},
                 {self._sql_ZY_njk()}
@@ -433,7 +430,6 @@ class Database:
             {self._sql_with_HW_jk(cache)}, 
                 {self._sql_X_nj(items)},
                 {self._sql_X_n()},
-                {self._sql_S_n(sample_weight)},
                 {self._sql_Z_nj(sample_weight)},
                 {self._sql_Z_j()}
             SELECT 
@@ -468,22 +464,32 @@ class Database:
             """
 
     def _sql_C_nk(self, items):
-        select, item = self._sql_transform(items['class'], concat=False, name=self.k)
-        select += f" WHERE {item} IN ({items['where']})" if items.get('where') else ''
-
-        return f"C_nk AS ({select})"
+        return f"""
+            C AS (
+                {self._sql_transform(items['class'], concat=False, name=self.k)}
+            ),
+            C_nk AS (
+                SELECT * FROM C
+                {f"WHERE {self.n} IN ({items['where']})" if items.get('where') else ''}
+            )
+            """
 
     def _sql_X_nj(self, items):
         if not isinstance(items, dict):
             return f"X_nj AS (SELECT * FROM {items})"
 
-        sql = []
-        for feature in items['features']:
-            select, item = self._sql_transform(feature, concat=True, name=self.j)
-            select += f" WHERE {item} IN ({items['where']})" if items.get('where') else ''
-            sql.append(select)
-        
-        return f"X_nj AS ({' UNION ALL '.join(sql)})"
+        return f"""
+            X AS (
+                {' UNION ALL '.join([
+                    self._sql_transform(feature, concat=True, name=self.j) 
+                    for feature in items['features']
+                ])}
+            ),
+            X_nj AS (
+                SELECT * FROM X
+                {f"WHERE {self.n} IN ({items['where']})" if items.get('where') else ''}
+            )
+            """
 
     def _sql_X_n(self):
         return f"""
@@ -511,18 +517,15 @@ class Database:
             )
             """
 
-    def _sql_S_n(self, sample_weight):
-        if isinstance(sample_weight, str) and sample_weight != 'norm':
-            return f"S_n AS ({sample_weight})"
-        
-        return 'S_n AS (SELECT 1)'
-
     def _sql_Z_nj(self, sample_weight):
         if isinstance(sample_weight, str):
             if sample_weight == 'norm':
                 return "Z_nj AS (SELECT * FROM X_nj)"
 
             return f"""
+                S_n AS (
+                    {sample_weight}
+                ),
                 Z_nj AS (
                     SELECT 
                         X_nj.{self.n},
