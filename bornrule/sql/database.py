@@ -469,8 +469,14 @@ class Database:
                 {self._sql_transform(items['class'], concat=False, name=self.k)}
             ),
             C_nk AS (
-                SELECT * FROM C
-                {f"WHERE {self.n} IN ({items['where']})" if items.get('where') else ''}
+                SELECT 
+                    * 
+                FROM 
+                    C
+                WHERE 
+                    {self.k} IS NOT NULL AND
+                    {self.n} IS NOT NULL {f'''AND 
+                    {self.n} IN ({items['where']})''' if items.get('where') else ''}
             )
             """
 
@@ -486,8 +492,14 @@ class Database:
                 ])}
             ),
             X_nj AS (
-                SELECT * FROM X
-                {f"WHERE {self.n} IN ({items['where']})" if items.get('where') else ''}
+                SELECT 
+                    * 
+                FROM 
+                    X
+                WHERE
+                    {self.j} IS NOT NULL AND
+                    {self.n} IS NOT NULL {f'''AND 
+                    {self.n} IN ({items['where']})''' if items.get('where') else ''}
             )
             """
 
