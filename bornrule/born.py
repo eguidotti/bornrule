@@ -9,7 +9,7 @@ try:
     import cupy
     gpu_support = True
 
-except ModuleNotFoundError:
+except ImportError:
     gpu_support = False
 
 
