@@ -465,18 +465,17 @@ class Database:
 
     def _sql_C_nk(self, items):
         return f"""
-            C AS (
-                {self._sql_transform(items['class'], concat=False, name=self.k)}
-            ),
             C_nk AS (
                 SELECT 
-                    * 
+                    C.{self.n},
+                    C.{self.k},
+                    C.{self.w}
                 FROM 
-                    C
+                    ({self._sql_transform(items['class'], concat=False, name=self.k)}) AS C, 
+                    ({items['where']}) AS N
                 WHERE 
-                    {self.k} IS NOT NULL AND
-                    {self.n} IS NOT NULL {f'''AND 
-                    {self.n} IN ({items['where']})''' if items.get('where') else ''}
+                    C.{self.n} = N.{self.n} AND
+                    C.{self.k} IS NOT NULL
             )
             """
 
@@ -485,21 +484,20 @@ class Database:
             return f"X_nj AS (SELECT * FROM {items})"
 
         return f"""
-            X AS (
-                {' UNION ALL '.join([
-                    self._sql_transform(feature, concat=True, name=self.j) 
-                    for feature in items['features']
-                ])}
-            ),
             X_nj AS (
                 SELECT 
-                    * 
+                    X.{self.n},
+                    X.{self.j},
+                    X.{self.w}
                 FROM 
-                    X
+                    ({' UNION ALL '.join([
+                        self._sql_transform(feature, concat=True, name=self.j) 
+                        for feature in items['features']
+                    ])}) AS X, 
+                    ({items['where']}) AS N
                 WHERE
-                    {self.j} IS NOT NULL AND
-                    {self.n} IS NOT NULL {f'''AND 
-                    {self.n} IN ({items['where']})''' if items.get('where') else ''}
+                    X.{self.n} = N.{self.n} AND
+                    X.{self.j} IS NOT NULL
             )
             """
 

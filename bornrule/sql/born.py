@@ -420,7 +420,7 @@ class BornClassifierSQL:
 
         only_X = isinstance(y, str) and y == "no_validation"
 
-        if (isinstance(X, str) or X is None) and (only_X or y is None):            
+        if isinstance(X, str) and (only_X or y is None):            
             X = dict(self.configs, where=X)
             return X if only_X else (X, y)
 
