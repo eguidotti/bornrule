@@ -10,6 +10,7 @@ except ModuleNotFoundError:
         "SQLAlchemy required but not installed. "
         "Please install SQLAlchemy with e.g. -> pip install sqlalchemy")
 
+from .database import Query
 from .sqlite import SQLite
 from .postgresql import PostgreSQL
 
@@ -17,19 +18,8 @@ from .postgresql import PostgreSQL
 class BornClassifierSQL:
     """SQL implementation of Born's Classifier
 
-    This class is compatible with SQLite and PostgreSQL.
-    Data items are to be passed as list of dictionaries in the format `[{feature: value, ...}, ...]`.
-    This classifier is suitable for classification with non-negative feature values.
-    The values are treated as unnormalized probability distributions.
-    If provided, configurations must be structured as follows:
-        {
-            'class': (table, item, field) OR 'SELECT item, class, weight',
-            'features': [
-                (table, item, field) OR 'SELECT item, feature, weight',
-                (table, item, field) OR 'SELECT item, feature, weight',
-                ...
-            ]
-        }
+    This class is compatible with SQLite and PostgreSQL. Data items are to be passed as list of 
+    dictionaries in the format `[{feature: value, ...}, ...]` or directly as SQL queries.
 
     Parameters
     ----------
@@ -39,7 +29,15 @@ class BornClassifierSQL:
         [SQLAlchemy engine or connection string](https://docs.sqlalchemy.org/en/14/core/engines.html)
         to connect to the database.
     configs: dict
-        Database configurations.
+        Database configurations structured as follows.
+        {
+            'class': (table, item, field) or 'SELECT item, class, weight',
+            'features': [
+                (table, item, field) or 'SELECT item, feature, weight FROM ...',
+                (table, item, field) or 'SELECT item, feature, weight FROM ...',
+                ...
+            ]
+        }
     type_feature : TraversibleType
         [SQLAlchemy type](https://docs.sqlalchemy.org/en/14/core/type_basics.html#generic-camelcase-types)
         of features.
@@ -170,18 +168,21 @@ class BornClassifierSQL:
                 self.db.write_params(con, **p)
                 self.params = p
 
-    def fit(self, X, y, sample_weight=None):
+    def fit(self, X, y=None, sample_weight=None):
         """Fit the classifier according to the training data X, y
 
         Parameters
         ----------
-        X : list of dict of length n_samples
-            Training data in the format `[{feature: value, ...}, ...]`.
+        X : list of dict of length n_samples, or str
+            Training data in the format `[{feature: value, ...}, ...]`, 
+            or an SQL query in the format `SELECT item FROM ...` giving the ids of the items to use.
         y : list-like of length n_samples
             List giving the target class for each sample. If a list of dict in the format `[{class: value, ...}, ...]`,
-            then each dict gives the distribution of the classes for each sample (e.g., multi-labeled samples)
-        sample_weight : list-like of length n_samples
-            List of weights that are assigned to individual samples.
+            then each dict gives the distribution of the classes for each sample (e.g., multi-labeled samples).
+            When `X` is an SQL query, `y` must be `None` and the classes are automatically retrieved from `configs`.
+        sample_weight : list-like of length n_samples, or str
+            List of weights that are assigned to individual samples, or an SQL query in the 
+            format `SELECT item, weight FROM ...` giving the weight for each item.
             If not provided, then each sample is given unit weight.
 
         Returns
@@ -199,7 +200,7 @@ class BornClassifierSQL:
 
         return self.partial_fit(X, y, sample_weight=sample_weight)
 
-    def partial_fit(self, X, y, sample_weight=None):
+    def partial_fit(self, X, y=None, sample_weight=None):
         """Incremental fit on a batch of samples
 
         This method is expected to be called several times consecutively on different chunks of a dataset so
@@ -207,13 +208,16 @@ class BornClassifierSQL:
 
         Parameters
         ----------
-        X : list of dict of length n_samples
-            Training data in the format `[{feature: value, ...}, ...]`.
+        X : list of dict of length n_samples, or str
+            Training data in the format `[{feature: value, ...}, ...]`, 
+            or an SQL query in the format `SELECT item FROM ...` giving the ids of the items to use.
         y : list-like of length n_samples
             List giving the target class for each sample. If a list of dict in the format `[{class: value, ...}, ...]`,
-            then each dict gives the distribution of the classes for each sample (e.g., multi-labeled samples)
-        sample_weight : list-like of length n_samples
-            List of weights that are assigned to individual samples.
+            then each dict gives the distribution of the classes for each sample (e.g., multi-labeled samples).
+            When `X` is an SQL query, `y` must be `None` and the classes are automatically retrieved from `configs`.
+        sample_weight : list-like of length n_samples, or str
+            List of weights that are assigned to individual samples, or an SQL query in the 
+            format `SELECT item, weight FROM ...` giving the weight for each item.
             If not provided, then each sample is given unit weight.
 
         Returns
@@ -222,7 +226,8 @@ class BornClassifierSQL:
             Returns the instance itself.
 
         """
-        X, y = self._validate(X=X, y=y, sample_weight=sample_weight)
+        self._validate(X=X, y=y, sample_weight=sample_weight)
+        X, sample_weight = self._transform(X=X, sample_weight=sample_weight)
 
         with self.db.connect() as con:
             with con.begin():
@@ -235,8 +240,9 @@ class BornClassifierSQL:
 
         Parameters
         ----------
-        X : list of dict of length n_samples
-            Test data in the format `[{feature: value, ...}, ...]`.
+        X : list of dict of length n_samples, or str
+            Test data in the format `[{feature: value, ...}, ...]`, 
+            or an SQL query in the format `SELECT item FROM ...` giving the ids of the items to use.
 
         Returns
         -------
@@ -244,7 +250,8 @@ class BornClassifierSQL:
             Predicted target classes for `X`.
 
         """
-        X = self._validate(X=X)
+        self._validate(X=X)
+        X = self._transform(X=X)
 
         with self.db.connect() as con:
             self.db.check_fitted(con)
@@ -258,7 +265,8 @@ class BornClassifierSQL:
         Parameters
         ----------
         X : list of dict of length n_samples
-            Test data in the format `[{feature: value, ...}, ...]`.
+            Test data in the format `[{feature: value, ...}, ...]`,
+            or an SQL query in the format `SELECT item FROM ...` giving the ids of the items to use.
 
         Returns
         -------
@@ -266,7 +274,8 @@ class BornClassifierSQL:
             Returns the probability of the samples for each class in the model.
 
         """
-        X = self._validate(X=X)
+        self._validate(X=X)
+        X = self._transform(X=X)
 
         with self.db.connect() as con:
             self.db.check_fitted(con)
@@ -275,88 +284,68 @@ class BornClassifierSQL:
         return self._pivot(proba, index=self.db.n, columns=self.db.k, values=self.db.w, X=X)
 
     def explain(self, X=None, sample_weight=None):
-        r"""Global and local explanation
-
-        For each test vector $`x`$, the $`a`$-th power of the unnormalized probability for the $`k`$-th class is
-        given by the matrix product:
-
-        ```math
-        u_k^a = \sum_j W_{jk}x_j^a
-        ```
-        where $`W`$ is a matrix of non-negative weights that generally depends on the model's
-        hyper-parameters ($`a`$, $`b`$, $`h`$). The classification probabilities are obtained by
-        normalizing $`u`$ such that it sums up to $`1`$.
-
-        This method returns global or local feature importance weights, depending on `X`:
-
-        - When `X` is not provided, this method returns the global weights $`W`$.
-
-        - When `X` is a single sample,
-        this method returns a matrix of entries $`(j,k)`$ where each entry is given by $`W_{jk}x_j^a`$.
-
-        - When `X` contains multiple samples,
-        then the values above are computed for each sample and this method returns their weighted sum.
-        By default, each sample is given unit weight.
+        r"""Compute global and local explanation
 
         Parameters
         ----------
         X : list of dict of length n_samples
-            Test data in the format `[{feature: value, ...}, ...]`.
+            Test data in the format `[{feature: value, ...}, ...]`,
+            or an SQL query in the format `SELECT item FROM ...` giving the ids of the items to use.
             If not provided, then global weights are returned.
-        sample_weight : list-like of length n_samples
-            List of weights that are assigned to individual samples.
+        sample_weight : list-like of length n_samples, or str
+            List of weights that are assigned to individual samples, or an SQL query in the 
+            format `SELECT item, weight FROM ...` giving the weight for each item.
             If not provided, then each sample is given unit weight.
 
         Returns
         -------
-        E : DataFrame of shape (n_features, n_classes)
+        df : DataFrame of shape (n_features, n_classes)
             Returns the feature importance for each class in the model.
 
         """
-        if X is not None:
-            X = self._validate(X=X, sample_weight=sample_weight)
-            if isinstance(X, list):
-                Z = defaultdict(int)
-     
-                if sample_weight is None:
-                    sample_weight = [1] * len(X)
+        z = defaultdict(int)
 
+        if X is not None:
+            self._validate(X=X, sample_weight=sample_weight)
+            X, sample_weight = self._transform(X=X, sample_weight=sample_weight)
+            if isinstance(X, list):
                 for x, w in zip(X, sample_weight):
                     n = sum(x.values())
                     if n != 0:
                         for f, v in x.items():
-                            Z[f] += w * v / n
+                            z[f] += w * v / n
                 
-                X, sample_weight = [Z], 'norm'
-
         with self.db.connect() as con:
             self.db.check_fitted(con)
-            W = self.db.explain(con, X=X, sample_weight=sample_weight)
+            df = self.db.explain(con, X=z or None, sample_weight=None)
 
-        return self._pivot(W, index=self.db.j, columns=self.db.k, values=self.db.w)
+        return self._pivot(df, index=self.db.j, columns=self.db.k, values=self.db.w)
 
-    def deploy(self, deep=False):
+    def deploy(self, deep=False, overwrite=False):
         """Deploy the instance
 
         Generate and store the weights that are used for prediction to speed up inference time.
-        A deployed instance cannot be modified. To update a deployed instance, undeploy it first.
 
         Parameters
         ----------
         deep : bool
             Whether the corpus is dropped.
+        overwrite : bool
+            Whether to overwrite the weights if the instance is already deployed.
 
         """
         with self.db.connect() as con:
             with con.begin():
+                if overwrite and self.is_deployed():
+                    self.db.undeploy(con, deep=False)
+
                 self.db.deploy(con, deep=deep)
 
     def undeploy(self, deep=False):
         """Undeploy the instance
 
-        Drop the weights that are used for prediction. Weights will be recomputed each time on-the-fly.
-        Useful for development, testing, and incremental fit.
-
+        Drop the weights that are used for prediction. 
+        
         Parameters
         ----------
         deep : bool
@@ -370,22 +359,6 @@ class BornClassifierSQL:
 
         if deep:
             self.params = None
-
-    def redeploy(self, deep=False):
-        """Redeploy the instance
-
-        Undeploy and deploy the instance again. Useful to update the weights in a single transaction.
-
-        Parameters
-        ----------
-        deep : bool
-            Whether the corpus is dropped.
-
-        """
-        with self.db.connect() as con:
-            with con.begin():
-                self.db.undeploy(con, deep=False)
-                self.db.deploy(con, deep=deep)
 
     def is_fitted(self):
         """Is fitted?
@@ -415,45 +388,53 @@ class BornClassifierSQL:
         with self.db.connect() as con:
             return self.db.is_deployed(con)
 
-    def _validate(self, X, y="no_validation", sample_weight=None):
-        """Input validation"""
+    def _transform(self, X, sample_weight="no_transform"):
+        """Transform input"""
+
+        if sample_weight is None:
+            sample_weight = 1
+        if isinstance(X, str):
+            X = Query(x=self.configs['features'], y=self.configs['class'], n=X)
+        if isinstance(X, list) and isinstance(sample_weight, (int, float)):
+            sample_weight = [sample_weight] * len(X)
+
+        return X if sample_weight == "no_transform" else (X, sample_weight)
+
+    @staticmethod
+    def _validate(X, y="no_validation", sample_weight=None):
+        """Validate input"""
 
         only_X = isinstance(y, str) and y == "no_validation"
+        
+        if isinstance(X, str):
 
-        if isinstance(X, str) and (only_X or y is None):            
-            X = dict(self.configs, where=X)
-            return X if only_X else (X, y)
-
-        if not isinstance(X, list):
-            raise ValueError(
-                "X must be a list of dict in the form [{feature: value, ...}, ...]"
-            )
-
-        for i, x in enumerate(X):
-            if not isinstance(x, dict):
+            if not only_X and y is not None:
                 raise ValueError(
-                    f"Element {i} of X is not a dict"
+                    "y must be None when X is a query string"
                 )
-
-            for _, value in x.items():
-                if value < 0:
-                    raise ValueError(
-                        f"Element {i} of X contains negative values"
-                    )
-
-        if sample_weight is not None:
-            if len(X) != len(sample_weight):
+            
+            if sample_weight is not None and not isinstance(sample_weight, (int, float)):
                 raise ValueError(
-                    "Dimension mismatch. X and sample_weight must have the same length"
+                    "sample_weight must be a query string or a number when X is a query string"
                 )
+                        
+        else:
 
-        if not only_X:
-            if len(X) != len(y):
+            if not isinstance(X, list):
+                raise ValueError(
+                    "X must be a list of dict or a query string"
+                )
+                            
+            if not only_X and len(X) != len(y):
                 raise ValueError(
                     "Dimension mismatch. X and y must have the same length"
                 )
-            
-        return X if only_X else (X, y)
+
+            if sample_weight is not None and not isinstance(sample_weight, (int, float)):
+                if len(X) != len(sample_weight):
+                    raise ValueError(
+                        "Dimension mismatch. X and sample_weight must have the same length"
+                    )
 
     @staticmethod
     def _pivot(df, index, values, columns=None, X=None):

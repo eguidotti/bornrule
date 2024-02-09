@@ -5,6 +5,12 @@ from collections import defaultdict
 from sqlalchemy import inspect, text, MetaData, Table, Column, Integer, Float, String
 
 
+class Query:
+    
+    def __init__(self, x, y, n) -> None:
+        self.x, self.y, self.n = x, y, n
+
+
 class Database:
 
     LOG = 'LOG'
@@ -211,18 +217,13 @@ class Database:
             'sum': [self.field_weight]
         }
 
-        if isinstance(X, dict) and y is None:
+        if isinstance(X, Query):
             values = self._sql_partial_fit(items=X, sample_weight=sample_weight)
 
         else:
-            if sample_weight is None:
-                sample_weight = [1] * len(X)
-
             corpus = defaultdict(lambda: defaultdict(int))
             for x, y, w in zip(X, y, sample_weight):
-                if not isinstance(y, dict):
-                    y = {y: 1}
-
+                y = {y: 1} if not isinstance(y, dict) else y
                 n = sum(x.values()) * sum(y.values())
                 if n != 0:
                     for k, p in y.items():
@@ -236,10 +237,10 @@ class Database:
 
         self.write(con, table=self.table_corpus, values=values, **if_exists)
         
-        sql = f"DELETE FROM {self.table_corpus} WHERE {self.w} = 0"
+        sql = f"DELETE FROM {self.table_corpus} WHERE {self.field_weight} = 0"
         con.execute(text(sql))
         
-        sql = f"SELECT * FROM {self.table_corpus} WHERE {self.w} < 0"
+        sql = f"SELECT * FROM {self.table_corpus} WHERE {self.field_weight} < 0 LIMIT 1"
         if con.execute(text(sql)).fetchone():
             raise ValueError(
                 f"Negative values are not allowed in the corpus."
@@ -254,8 +255,21 @@ class Database:
 
         values = [
             {self.field_item: i, self.field_feature: f, self.field_weight: w}
-            for i, x in enumerate(X)
+            for i, x in enumerate(X) 
             for f, w in x.items()
+        ]
+
+        return self.write(con, table=table, values=values)
+
+    def write_item(self, con, X):
+        table = self.table_temp(
+            Column(self.field_feature, self.type_feature, primary_key=True),
+            Column(self.field_weight, Float),
+        )
+
+        values = [
+            {self.field_feature: f, self.field_weight: w}
+            for f, w in X.items()
         ]
 
         return self.write(con, table=table, values=values)
@@ -296,8 +310,11 @@ class Database:
         self.write(
             con,
             table=self.table_weights,
-            columns=[self.j, self.k, self.w],
-            values=f"{self._sql_with_HW_jk(cache=False)} SELECT {self.j}, {self.k}, {self.w} FROM HW_jk"
+            columns=[self.field_feature, self.field_class, self.field_weight],
+            values=f"""{
+                self._sql_with_HW_jk(cache=False)} 
+                SELECT {self.field_feature}, {self.field_class}, {self.field_weight} 
+                FROM HW_jk"""
         )
 
         if deep:
@@ -318,10 +335,8 @@ class Database:
 
         if deep:
             self.table_corpus.drop(con, checkfirst=True)
-
             if self.is_params(con):
                 con.execute(text(f"DELETE FROM {self.table_params} WHERE {self.field_id}='{self.id}'"))
-
                 if con.execute(text(f"SELECT COUNT(*) FROM {self.table_params}")).fetchone()[0] == 0:
                     self.table_params.drop(con)
 
@@ -332,21 +347,21 @@ class Database:
 
     def predict(self, con, X):
         cache = self.is_deployed(con)
-        items = X if isinstance(X, dict) else self.write_items(con, X)
+        items = X if isinstance(X, Query) else self.write_items(con, X)
         sql = self._sql_predict(items, cache)
 
         return self.read_sql(sql, con)
 
     def predict_proba(self, con, X):
         cache = self.is_deployed(con)
-        items = X if isinstance(X, dict) else self.write_items(con, X)
+        items = X if isinstance(X, Query) else self.write_items(con, X)
         sql = self._sql_predict_proba(items, cache)
 
         return self.read_sql(sql, con)
 
     def explain(self, con, X, sample_weight):
         cache = self.is_deployed(con)
-        items = X if isinstance(X, dict) else self.write_items(con, X) if X else None
+        items = X if isinstance(X, Query) else self.write_item(con, X) if X else None
         sql = self._sql_explain(items, sample_weight, cache)
 
         return self.read_sql(sql, con)
@@ -372,84 +387,110 @@ class Database:
         
     def _sql_partial_fit(self, items, sample_weight):
         return f"""
-            WITH
-                {self._sql_X_nj(items)},
-                {self._sql_C_nk(items)},
-                {self._sql_X_n()},
-                {self._sql_C_n()},
-                {self._sql_Z_nj(sample_weight)},
-                {self._sql_Y_nk()},
-                {self._sql_ZY_njk()}
+            WITH 
+            {', '.join(filter(None, [
+                self._sql_N_n(items),
+                self._sql_X_nj(items),
+                self._sql_Y_nk(items),
+                self._sql_XY_njk(),
+                self._sql_XY_n(),
+                self._sql_W_n(sample_weight),
+                self._sql_P_jk(sample_weight)
+            ]))}
             SELECT 
                 {self.j},
                 {self.k},
-                {self.SUM}({self.w}) AS {self.w}
+                {self.w}
             FROM
-                ZY_njk
-            GROUP BY 
-                ZY_njk.{self.j}, 
-                ZY_njk.{self.k}
+                P_jk
             """
 
     def _sql_predict(self, items, cache):
         return f"""
-            {self._sql_with_HW_jk(cache)}, 
-                {self._sql_X_nj(items)},
-                {self._sql_X_nj_a()},
-                {self._sql_HWX_nk()},
-                R_nk AS (
-                    SELECT 
-                        {self.n}, 
-                        {self.k}, 
-                        ROW_NUMBER() OVER(PARTITION BY {self.n} ORDER BY {self.w} DESC) AS {self.w}
-                    FROM 
-                        HWX_nk
-                )
+            {self._sql_with_HW_jk(cache)},
+            {', '.join(filter(None, [
+                self._sql_N_n(items),
+                self._sql_X_nj(items),
+                self._sql_HWX_nk(items)
+            ]))}
             SELECT 
-                {self.n}, 
-                {self.k}
-            FROM 
-                R_nk
+                R_nk.{self.n}, 
+                R_nk.{self.k}
+            FROM (
+                SELECT 
+                    {self.n}, 
+                    {self.k},
+                    ROW_NUMBER() OVER(
+                        PARTITION BY {self.n} ORDER BY {self.w} DESC
+                    ) AS {self.w}
+                FROM 
+                    HWX_nk
+                ) AS R_nk
             WHERE 
-                {self.w} = 1
+                R_nk.{self.w} = 1
             """
 
     def _sql_predict_proba(self, items, cache):
         return f"""
-            {self._sql_with_HW_jk(cache)}, 
-                {self._sql_X_nj(items)},
-                {self._sql_X_nj_a()},
-                {self._sql_HWX_nk()},
-                {self._sql_U_nk()}, 
-                {self._sql_U_n()}
+            {self._sql_with_HW_jk(cache)},
+            {', '.join(filter(None, [
+                self._sql_N_n(items),
+                self._sql_X_nj(items),
+                self._sql_HWX_nk(items),
+                self._sql_U_nk(),
+                self._sql_U_n()
+            ]))}
             SELECT 
-                U_nk.{self.n}, 
-                U_nk.{self.k}, 
+                U_nk.{self.n} AS {self.n},
+                U_nk.{self.k} AS {self.k},
                 U_nk.{self.w} / U_n.{self.w} AS {self.w}
             FROM 
                 U_nk, U_n
-            WHERE 
+            WHERE
                 U_nk.{self.n} = U_n.{self.n}
             """
 
     def _sql_explain(self, items, sample_weight, cache):
         if items is None:
-            return f"{self._sql_with_HW_jk(cache)} SELECT * FROM HW_jk"
+            return f"""
+                {self._sql_with_HW_jk(cache)} 
+                SELECT 
+                    {self.j}, 
+                    {self.k}, 
+                    {self.w} 
+                FROM 
+                    HW_jk
+                """
+        
+        if not isinstance(items, Query):
+            return f"""
+                {self._sql_with_HW_jk(cache)}
+                SELECT
+                    HW_jk.{self.j},
+                    HW_jk.{self.k},
+                    HW_jk.{self.w} * {self.POW}({items}.{self.w}, ABH.a) AS {self.w}
+                FROM
+                    HW_jk, {items}, ABH
+                WHERE
+                    HW_jk.{self.j} = {items}.{self.j}
+                """
                 
         return f"""
-            {self._sql_with_HW_jk(cache)}, 
-                {self._sql_X_nj(items)},
-                {self._sql_X_n()},
-                {self._sql_Z_nj(sample_weight)},
-                {self._sql_Z_j()}
-            SELECT 
+            {self._sql_with_HW_jk(cache)},
+            {', '.join(filter(None, [                
+                self._sql_N_n(items),
+                self._sql_X_n(items),
+                self._sql_W_n(sample_weight),
+                self._sql_Z_j(sample_weight)
+            ]))}
+            SELECT
                 HW_jk.{self.j},
-                HW_jk.{self.k}, 
-                HW_jk.{self.w} * {self.POW}(Z_j.{self.w}, ABH.a) AS {self.w} 
-            FROM 
-                Z_j, HW_jk, ABH
-            WHERE 
-                Z_j.{self.j} = HW_jk.{self.j}
+                HW_jk.{self.k},
+                HW_jk.{self.w} * {self.POW}(Z_j.{self.w}, ABH.a) AS {self.w}
+            FROM
+                HW_jk, Z_j
+            WHERE
+                HW_jk.{self.j} = Z_j.{self.j}
             """
 
     def _sql_with_HW_jk(self, cache):
@@ -457,175 +498,37 @@ class Database:
             return f"""
                 WITH 
                     {self._sql_ABH()},
-                    HW_jk AS (SELECT * FROM {self.table_weights})
+                    HW_jk AS (
+                        SELECT 
+                            {self.j}, 
+                            {self.k}, 
+                            {self.w} 
+                        FROM 
+                            {self.table_weights}
+                    )
                 """
 
         return f"""
-            WITH 
-                {self._sql_ABH()},
-                {self._sql_P_j()}, 
-                {self._sql_P_k()}, 
-                {self._sql_P_j_b()}, 
-                {self._sql_P_k_b()}, 
-                {self._sql_W_jk()}, 
-                {self._sql_W_j()}, 
-                {self._sql_H_jk()},
-                {self._sql_LN()},
-                {self._sql_H_j()}, 
-                {self._sql_H_j_h()}, 
-                {self._sql_W_jk_a()},
-                {self._sql_HW_jk()}
-            """
-
-    def _sql_X_nj(self, items):
-        if not isinstance(items, dict):
-            return f"X_nj AS (SELECT * FROM {items})"
-
-        return f"""
-            N AS (
-                {items['where']}
-            ),
-            X AS ({
-                ' UNION ALL '.join([
-                self._sql_transform(feature, concat=True, name=self.j) 
-                for feature in items['features']])
-            }),
-            X_nj AS (
-                SELECT 
-                    X.{self.n},
-                    X.{self.j},
-                    X.{self.w}
-                FROM 
-                    X, N
-                WHERE
-                    X.{self.n} = N.{self.n} AND
-                    X.{self.j} IS NOT NULL
-            )
-            """
-
-    def _sql_C_nk(self, items):
-        return f"""
-            C AS ({
-                self._sql_transform(items['class'], concat=False, name=self.k)
-            }),
-            C_nk AS (
-                SELECT 
-                    C.{self.n},
-                    C.{self.k},
-                    C.{self.w}
-                FROM 
-                    C, N
-                WHERE 
-                    C.{self.n} = N.{self.n} AND
-                    C.{self.k} IS NOT NULL
-            )
-            """
-
-    def _sql_X_n(self):
-        return f"""
-            X_n AS (
-                SELECT 
-                    {self.n},
-                    {self.SUM}({self.w}) AS {self.w}
-                FROM 
-                    X_nj
-                GROUP BY
-                    {self.n}
-            )
-            """
-    
-    def _sql_C_n(self):
-        return f"""
-            C_n AS (
-                SELECT 
-                    {self.n},
-                    {self.SUM}({self.w}) AS {self.w}
-                FROM 
-                    C_nk
-                GROUP BY
-                    {self.n}
-            )
-            """
-
-    def _sql_Z_nj(self, sample_weight):
-        if isinstance(sample_weight, str):
-            if sample_weight == 'norm':
-                return "Z_nj AS (SELECT * FROM X_nj)"
-
-            return f"""
-                S_n AS (
-                    {sample_weight}
-                ),
-                Z_nj AS (
+            WITH {', '.join(filter(None, [f'''
+                P_jk AS (
                     SELECT 
-                        X_nj.{self.n},
-                        X_nj.{self.j},
-                        X_nj.{self.w} / X_n.{self.w} * S_n.{self.w} AS {self.w}
-                    FROM
-                        X_nj, X_n, S_n
-                    WHERE
-                        X_nj.{self.n} = X_n.{self.n} AND
-                        X_nj.{self.n} = S_n.{self.n}
-                )
-                """
-
-        return f"""
-            Z_nj AS (
-                SELECT 
-                    X_nj.{self.n},
-                    X_nj.{self.j},
-                    X_nj.{self.w} / X_n.{self.w} 
-                        {f'* {sample_weight}' if sample_weight is not None else ''} 
-                        AS {self.w}
-                FROM
-                    X_nj, X_n
-                WHERE
-                    X_nj.{self.n} = X_n.{self.n}
-            )
-            """
-
-    def _sql_Z_j(self):
-        return f"""
-            Z_j AS (
-                SELECT 
-                    {self.j},
-                    {self.SUM}({self.w}) AS {self.w}
-                FROM 
-                    Z_nj
-                GROUP BY
-                    {self.j}
-            )
+                        {self.j}, 
+                        {self.k}, 
+                        {self.w} 
+                    FROM 
+                        {self.table_corpus}
+                )''',
+                self._sql_ABH(),
+                self._sql_P_j(),
+                self._sql_P_k(),
+                self._sql_W_jk(),
+                self._sql_W_j(),
+                self._sql_H_jk(),
+                self._sql_H_j(),
+                self._sql_HW_jk()
+            ]))}
             """
     
-    def _sql_Y_nk(self):
-        return f"""
-            Y_nk AS (
-                SELECT 
-                    C_nk.{self.n},
-                    C_nk.{self.k},
-                    C_nk.{self.w} / C_n.{self.w} AS {self.w}
-                FROM
-                    C_nk, C_n
-                WHERE
-                    C_nk.{self.n} = C_n.{self.n}
-            )
-            """
-
-    def _sql_ZY_njk(self):
-        return f"""
-            ZY_njk AS (
-                SELECT
-                    Z_nj.{self.n},
-                    Z_nj.{self.j},
-                    Y_nk.{self.k},
-                    Y_nk.{self.w} * Z_nj.{self.w} AS {self.w}
-                FROM
-                    Z_nj, Y_nk
-                WHERE
-                    Z_nj.{self.n} = Y_nk.{self.n}
-            )
-            """
-
     def _sql_ABH(self):
         return f"""
             ABH AS (
@@ -637,31 +540,119 @@ class Database:
                     {self.field_id} = '{self.id}'
             )
             """
-
-    def _sql_LN(self):
+    
+    def _sql_X_nj(self, items):
+        if isinstance(items, Query):
+            return f"""
+                X_nj AS ({
+                    ' UNION ALL '.join([
+                    self._sql_transform(feature, concat=True, name=self.j) 
+                    for feature in items.x])
+                })
+                """
+        
         return f"""
-            LN AS (
+            X_nj AS (
                 SELECT 
-                    CASE 
-                        WHEN COUNT(*) > 1 
-                        THEN {self.LOG}(COUNT(*))
-                        ELSE 1
-                    END AS {self.w}
+                    {self.n},
+                    {self.j},
+                    {self.w}
                 FROM 
-                    P_k
+                    {items}
             )
             """
+    
+    def _sql_Y_nk(self, items):
+        if isinstance(items, Query):
+            return f"""
+                Y_nk AS ({
+                    self._sql_transform(items.y, concat=False, name=self.k)
+                })
+                """
+        
+        return ''
 
-    def _sql_P_k(self):
+    def _sql_N_n(self, items):
+        if isinstance(items, Query):
+            return f"""
+                N_n AS ({
+                    items.n
+                })
+                """
+        
+        return ''
+
+    def _sql_W_n(self, sample_weight):
+        if isinstance(sample_weight, str):
+            return f"""
+                W_n AS ({
+                    sample_weight
+                })
+                """
+        
+        return ''
+    
+    def _sql_XY_njk(self):
         return f"""
-            P_k AS (
+            XY_njk AS (
+                SELECT
+                    N_n.{self.n} AS {self.n},
+                    X_nj.{self.j} AS {self.j},
+                    Y_nk.{self.k} AS {self.k},
+                    X_nj.{self.w} * Y_nk.{self.w} AS {self.w}
+                FROM
+                    N_n, X_nj, Y_nk
+                WHERE
+                    N_n.{self.n} = X_nj.{self.n} AND 
+                    N_n.{self.n} = Y_nk.{self.n}
+            )
+            """
+    
+    def _sql_XY_n(self):
+        return f"""
+            XY_n AS (
                 SELECT 
-                    {self.k}, 
-                    {self.SUM}({self.w}) AS {self.w}
+                    {self.n}, 
+                    {self.SUM}({self.w}) AS {self.w} 
                 FROM 
-                    {self.table_corpus}
+                    XY_njk 
                 GROUP BY 
-                    {self.k}
+                    {self.n}
+            )
+            """
+    
+    def _sql_P_jk(self, sample_weight):
+        if isinstance(sample_weight, str):
+            return f"""
+                P_jk AS (
+                    SELECT 
+                        XY_njk.{self.j} AS {self.j},
+                        XY_njk.{self.k} AS {self.k},
+                        {self.SUM}(W_n.{self.w} * XY_njk.{self.w} / XY_n.{self.w}) AS {self.w}
+                    FROM
+                        XY_njk, XY_n, W_n
+                    WHERE
+                        XY_njk.{self.n} = XY_n.{self.n} AND
+                        XY_njk.{self.n} = W_n.{self.n} 
+                    GROUP BY
+                        XY_njk.{self.j},
+                        XY_njk.{self.k}
+                )
+                """
+                
+        return f"""
+            P_jk AS (
+                SELECT 
+                    XY_njk.{self.j} AS {self.j},
+                    XY_njk.{self.k} AS {self.k},
+                    {sample_weight} * {self.SUM}(XY_njk.{self.w} / XY_n.{self.w}) AS {self.w}
+                FROM
+                    XY_njk, XY_n
+                WHERE
+                    XY_njk.{self.n} = XY_n.{self.n}
+                GROUP BY
+                    XY_njk.{self.j},
+                    XY_njk.{self.k}
             )
             """
 
@@ -670,48 +661,39 @@ class Database:
             P_j AS (
                 SELECT 
                     {self.j}, 
-                    {self.SUM}({self.w}) AS {self.w}
+                    {self.SUM}({self.w}) AS {self.w} 
                 FROM 
-                    {self.table_corpus}
+                    P_jk 
                 GROUP BY 
                     {self.j}
             )
             """
-
-    def _sql_P_k_b(self):
+    
+    def _sql_P_k(self):
         return f"""
-            P_k_b AS (
+            P_k AS (
                 SELECT 
                     {self.k}, 
-                    {self.POW}(P_k.{self.w}, - ABH.b) AS {self.w}
+                    {self.SUM}({self.w}) AS {self.w} 
                 FROM 
-                    P_k, ABH
+                    P_jk 
+                GROUP BY 
+                    {self.k}
             )
             """
-
-    def _sql_P_j_b(self):
-        return f"""
-            P_j_b AS (
-                SELECT 
-                    {self.j}, 
-                    {self.POW}(P_j.{self.w}, ABH.b - 1) AS {self.w}
-                FROM 
-                    P_j, ABH
-            )
-            """
-
+    
     def _sql_W_jk(self):
         return f"""
             W_jk AS (
                 SELECT 
-                    {self.table_corpus}.{self.j}, 
-                    {self.table_corpus}.{self.k}, 
-                    {self.table_corpus}.{self.w} * P_j_b.{self.w} * P_k_b.{self.w} AS {self.w}                        
-                FROM 
-                    {self.table_corpus}, P_j_b, P_k_b
-                WHERE 
-                    {self.table_corpus}.{self.j} = P_j_b.{self.j} AND
-                    {self.table_corpus}.{self.k} = P_k_b.{self.k}
+                    P_jk.{self.j} AS {self.j},
+                    P_jk.{self.k} AS {self.k},
+                    P_jk.{self.w} * {self.POW}(P_k.{self.w}, -ABH.b) * {self.POW}(P_j.{self.w}, ABH.b-1) AS {self.w} 
+                FROM
+                    P_jk, P_j, P_k, ABH
+                WHERE
+                    P_jk.{self.j} = P_j.{self.j} AND
+                    P_jk.{self.k} = P_k.{self.k} 
             )
             """
 
@@ -720,103 +702,88 @@ class Database:
             W_j AS (
                 SELECT 
                     {self.j}, 
-                    {self.SUM}({self.w}) AS {self.w}
+                    {self.SUM}({self.w}) AS {self.w} 
                 FROM 
-                    W_jk
+                    W_jk 
                 GROUP BY 
                     {self.j}
             )
             """
-
+    
     def _sql_H_jk(self):
         return f"""
             H_jk AS (
                 SELECT 
-                    W_jk.{self.j}, 
-                    W_jk.{self.k}, 
-                    W_jk.{self.w} / W_j.{self.w} AS {self.w}
-                FROM 
+                    W_jk.{self.j} AS {self.j},
+                    W_jk.{self.k} AS {self.k},
+                    W_jk.{self.w} / W_j.{self.w} AS {self.w} 
+                FROM
                     W_jk, W_j
-                WHERE 
+                WHERE
                     W_jk.{self.j} = W_j.{self.j}
             )
             """
-
+    
     def _sql_H_j(self):
         return f"""
             H_j AS (
                 SELECT 
-                    H_jk.{self.j}, 
-                    {self.SUM}(H_jk.{self.w} * {self.LOG}(H_jk.{self.w})) AS {self.w}
+                    H_jk.{self.j} AS {self.j},
+                    1 + {self.SUM}(H_jk.{self.w} * {self.LOG}(H_jk.{self.w})) / (
+                        SELECT CASE WHEN COUNT(*) > 1 THEN {self.LOG}(COUNT(*)) ELSE 1 END FROM P_k
+                    ) AS {self.w}
                 FROM 
                     H_jk
                 GROUP BY 
-                    {self.j}
+                    H_jk.{self.j}
             )
             """
-
-    def _sql_H_j_h(self):
-        return f"""
-            H_j_h AS (
-                SELECT 
-                    H_j.{self.j}, 
-                    {self.POW}(1 + H_j.{self.w} / LN.{self.w}, ABH.h) AS {self.w}
-                FROM 
-                    H_j, ABH, LN
-            )
-            """
-
-    def _sql_W_jk_a(self):
-        return f"""
-            W_jk_a AS (
-                SELECT 
-                    W_jk.{self.j}, 
-                    W_jk.{self.k}, 
-                    {self.POW}(W_jk.{self.w}, ABH.a) AS {self.w}
-                FROM 
-                    W_jk, ABH
-            )
-            """
-
+    
     def _sql_HW_jk(self):
         return f"""
             HW_jk AS (
-                SELECT 
-                    W_jk_a.{self.j}, 
-                    W_jk_a.{self.k}, 
-                    W_jk_a.{self.w} * H_j_h.{self.w} AS {self.w}
-                FROM 
-                    W_jk_a, H_j_h
-                WHERE 
-                    W_jk_a.{self.j} = H_j_h.{self.j}
-            )
-            """
-
-    def _sql_X_nj_a(self):
-        return f"""
-            X_nj_a AS (
                 SELECT
-                    X_nj.{self.n},
-                    X_nj.{self.j},
-                    {self.POW}(X_nj.{self.w}, ABH.a) AS {self.w} 
-                FROM 
-                    X_nj, ABH
+                    W_jk.{self.j} AS {self.j},
+                    W_jk.{self.k} AS {self.k},
+                    {self.POW}(H_j.{self.w}, ABH.h) * {self.POW}(W_jk.{self.w}, ABH.a) AS {self.w}
+                FROM
+                    W_jk, H_j, ABH
+                WHERE
+                    W_jk.{self.j} = H_j.{self.j}
             )
             """
 
-    def _sql_HWX_nk(self):
+    def _sql_HWX_nk(self, items):
+        if isinstance(items, Query):
+            return f"""
+                HWX_nk AS (
+                    SELECT
+                        N_n.{self.n} AS {self.n},
+                        HW_jk.{self.k} AS {self.k},
+                        {self.SUM}(HW_jk.{self.w} * {self.POW}(X_nj.{self.w}, ABH.a)) AS {self.w}
+                    FROM
+                        N_n, HW_jk, X_nj, ABH
+                    WHERE
+                        N_n.{self.n} = X_nj.{self.n} AND
+                        HW_jk.{self.j} = X_nj.{self.j}
+                    GROUP BY
+                        N_n.{self.n},
+                        HW_jk.{self.k}
+                )
+                """
+        
         return f"""
             HWX_nk AS (
-                SELECT 
-                    X_nj_a.{self.n}, 
-                    HW_jk.{self.k}, 
-                    {self.SUM}(HW_jk.{self.w} * X_nj_a.{self.w}) AS {self.w} 
-                FROM 
-                    X_nj_a, HW_jk
-                WHERE 
-                    X_nj_a.{self.j} = HW_jk.{self.j}
+                SELECT
+                    X_nj.{self.n} AS {self.n},
+                    HW_jk.{self.k} AS {self.k},
+                    {self.SUM}(HW_jk.{self.w} * {self.POW}(X_nj.{self.w}, ABH.a)) AS {self.w}
+                FROM
+                    HW_jk, X_nj, ABH
+                WHERE
+                    HW_jk.{self.j} = X_nj.{self.j}
                 GROUP BY
-                    X_nj_a.{self.n}, 
+                    X_nj.{self.n},
                     HW_jk.{self.k}
             )
             """
@@ -825,23 +792,78 @@ class Database:
         return f"""
             U_nk AS (
                 SELECT 
-                    HWX_nk.{self.n}, 
-                    HWX_nk.{self.k}, 
-                    {self.POW}(HWX_nk.{self.w}, 1 / ABH.a) AS {self.w} 
+                    {self.n}, 
+                    {self.k}, 
+                    {self.POW}({self.w}, 1/ABH.a) AS {self.w} 
                 FROM 
                     HWX_nk, ABH
             )
             """
-
+    
     def _sql_U_n(self):
         return f"""
             U_n AS (
                 SELECT 
                     {self.n}, 
-                    {self.SUM}({self.w}) AS {self.w}
+                    {self.SUM}({self.w}) AS {self.w} 
                 FROM 
-                    U_nk
+                    U_nk 
                 GROUP BY 
                     {self.n}
+            )
+            """
+    
+    def _sql_X_n(self, items):
+        if isinstance(items, Query):
+            return f"""
+                X_n AS (
+                    SELECT 
+                        N_n.{self.n} AS {self.n}, 
+                        {self.SUM}(X_nj.{self.w}) AS {self.w} 
+                    FROM 
+                        N_n, X_nj 
+                    WHERE
+                        N_n.{self.n} = X_nj.{self.n}
+                    GROUP BY 
+                        N_n.{self.n}
+                )
+                """
+        
+        return f"""
+            X_n AS (
+                SELECT 
+                    {self.n}, 
+                    {self.SUM}({self.w}) AS {self.w} 
+                FROM 
+                    X_nj 
+                GROUP BY 
+                    {self.n}
+            )
+            """
+    
+    def _sql_Z_j(self, sample_weight):
+        if isinstance(sample_weight, str):
+            return f"""
+                Z_j AS (
+                    SELECT
+                        X_nj.{self.j},
+                        {self.SUM}(W_n.{self.w} * X_nj.{self.w} / X_n.{self.w}) AS {self.w}
+                    FROM 
+                        X_nj, X_n, W_n
+                    WHERE
+                        X_nj.{self.n} = X_n.{self.n} AND
+                        X_nj.{self.n} = W_n.{self.n}
+                )
+                """
+        
+        return f"""
+            Z_j AS (
+                SELECT
+                    X_nj.{self.j},
+                    {sample_weight} * {self.SUM}(X_nj.{self.w} / X_n.{self.w}) AS {self.w}
+                FROM 
+                    X_nj, X_n
+                WHERE
+                    X_nj.{self.n} = X_n.{self.n}
             )
             """
