@@ -403,6 +403,8 @@ class Database:
                 {self.w}
             FROM
                 P_jk
+            WHERE
+                1 = 1
             """
 
     def _sql_predict(self, items, cache):
@@ -479,6 +481,7 @@ class Database:
             {self._sql_with_HW_jk(cache)},
             {', '.join(filter(None, [                
                 self._sql_N_n(items),
+                self._sql_X_nj(items),
                 self._sql_X_n(items),
                 self._sql_W_n(sample_weight),
                 self._sql_Z_j(sample_weight)
@@ -488,7 +491,7 @@ class Database:
                 HW_jk.{self.k},
                 HW_jk.{self.w} * {self.POW}(Z_j.{self.w}, ABH.a) AS {self.w}
             FROM
-                HW_jk, Z_j
+                HW_jk, Z_j, ABH
             WHERE
                 HW_jk.{self.j} = Z_j.{self.j}
             """
@@ -613,7 +616,7 @@ class Database:
             XY_n AS (
                 SELECT 
                     {self.n}, 
-                    {self.SUM}({self.w}) AS {self.w} 
+                    {self.SUM}({self.w}) + 0.0 AS {self.w} 
                 FROM 
                     XY_njk 
                 GROUP BY 
@@ -819,7 +822,7 @@ class Database:
                 X_n AS (
                     SELECT 
                         N_n.{self.n} AS {self.n}, 
-                        {self.SUM}(X_nj.{self.w}) AS {self.w} 
+                        {self.SUM}(X_nj.{self.w}) + 0.0 AS {self.w} 
                     FROM 
                         N_n, X_nj 
                     WHERE
@@ -853,6 +856,8 @@ class Database:
                     WHERE
                         X_nj.{self.n} = X_n.{self.n} AND
                         X_nj.{self.n} = W_n.{self.n}
+                    GROUP BY
+                        X_nj.{self.j}
                 )
                 """
         
@@ -865,5 +870,7 @@ class Database:
                     X_nj, X_n
                 WHERE
                     X_nj.{self.n} = X_n.{self.n}
+                GROUP BY
+                    X_nj.{self.j}
             )
             """

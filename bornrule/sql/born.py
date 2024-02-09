@@ -303,21 +303,22 @@ class BornClassifierSQL:
             Returns the feature importance for each class in the model.
 
         """
-        z = defaultdict(int)
-
         if X is not None:
             self._validate(X=X, sample_weight=sample_weight)
             X, sample_weight = self._transform(X=X, sample_weight=sample_weight)
+            
             if isinstance(X, list):
+                z = defaultdict(int)
                 for x, w in zip(X, sample_weight):
                     n = sum(x.values())
                     if n != 0:
                         for f, v in x.items():
                             z[f] += w * v / n
+                X = z
                 
         with self.db.connect() as con:
             self.db.check_fitted(con)
-            df = self.db.explain(con, X=z or None, sample_weight=None)
+            df = self.db.explain(con, X=X, sample_weight=sample_weight)
 
         return self._pivot(df, index=self.db.j, columns=self.db.k, values=self.db.w)
 
@@ -413,7 +414,7 @@ class BornClassifierSQL:
                     "y must be None when X is a query string"
                 )
             
-            if sample_weight is not None and not isinstance(sample_weight, (int, float)):
+            if sample_weight is not None and not isinstance(sample_weight, (str, int, float)):
                 raise ValueError(
                     "sample_weight must be a query string or a number when X is a query string"
                 )

@@ -102,6 +102,18 @@ def test_predict():
     assert all([p == 1 for p in pred]), "Broken predictions when the model is fitted with only one class"
 
 
+def test_unlearn():
+    sql = BornClassifierSQL()
+    sql.fit(B_train[0:100], y_train[0:100])
+    ex1 = sql.explain()
+
+    sql.fit(B_train[0:110], y_train[0:110])
+    sql.partial_fit(B_train[100:110], y_train[100:110], sample_weight=-1)
+    ex2 = sql.explain()
+
+    assert np.allclose(ex1, ex2.loc[ex1.index][ex1.columns]), \
+        f"Unlearning does not unlearn"
+
 @pytest.mark.parametrize(
     "params, id, engine", [
         ({"a": 0.5, "b": 1.0, "h": 1.0}, "test_sqlite_1", "sqlite:///"),
