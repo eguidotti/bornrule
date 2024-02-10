@@ -1,13 +1,14 @@
-import numpy as np
-import pandas as pd
 from bornrule.sql import BornClassifierSQL
 
 
-# in-memory
-bc1 = BornClassifierSQL()
+# Zoo db
+engine = "sqlite:///tests/zoo.db"
 
-# db config 1
-bc2 = BornClassifierSQL('c1', engine="sqlite:///zoo.db", configs={
+# No configs
+bc1 = BornClassifierSQL('bc1', engine=engine)
+
+# Configs 1
+bc2 = BornClassifierSQL('bc2', engine=engine, configs={
   'class': ('zoo', 'animal_id', 'class_type'),
     'features': [
         ('zoo', 'animal_id', 'hair'),
@@ -15,8 +16,8 @@ bc2 = BornClassifierSQL('c1', engine="sqlite:///zoo.db", configs={
     ]
 })
 
-# db config 2
-bc3 = BornClassifierSQL('c2', engine="sqlite:///zoo.db", configs={
+# Configs 2
+bc3 = BornClassifierSQL('bc3', engine=engine, configs={
   'class': "SELECT animal_id AS item, class_type AS class, 1 AS weight FROM zoo",
     'features': [
         "SELECT animal_id AS item, 'zoo:hair:'||hair AS feature, 1 as weight FROM zoo",
@@ -24,11 +25,9 @@ bc3 = BornClassifierSQL('c2', engine="sqlite:///zoo.db", configs={
     ]
 })
 
-# write zoo to db
-zoo = pd.read_csv('./tests/zoo.csv')
-with bc2.db.connect() as con:
-  zoo['animal_id'] = zoo.index
-  zoo.to_sql("zoo", con)
+# Read zoo from db
+with bc1.db.connect() as con:
+    zoo = bc1.db.read_sql("select * from zoo", con)
 
 # X, y
 X = [{f'zoo:hair:{h}': 1, f'zoo:feathers:{f}': 1} for h, f in zip(zoo.hair, zoo.feathers)]
