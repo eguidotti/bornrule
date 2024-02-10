@@ -315,6 +315,7 @@ class BornClassifierSQL:
                         for f, v in x.items():
                             z[f] += w * v / n
                 X = z
+                sample_weight = 1
                 
         with self.db.connect() as con:
             self.db.check_fitted(con)
