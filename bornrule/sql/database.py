@@ -383,6 +383,8 @@ class Database:
                 1.0 AS {self.w}
             FROM 
                 {table}
+            WHERE
+                {items[2]} IS NOT NULL
             """
         
     def _sql_partial_fit(self, items, sample_weight):
