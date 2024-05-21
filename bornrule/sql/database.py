@@ -414,7 +414,7 @@ class Database:
             {', '.join(filter(None, [
                 self._sql_N_n(items),
                 self._sql_X_nj(items),
-                self._sql_HWX_nk(items)
+                self._sql_HWX_nk()
             ]))}
             SELECT 
                 R_nk.{self.n}, 
@@ -439,7 +439,7 @@ class Database:
             {', '.join(filter(None, [
                 self._sql_N_n(items),
                 self._sql_X_nj(items),
-                self._sql_HWX_nk(items),
+                self._sql_HWX_nk(),
                 self._sql_U_nk(),
                 self._sql_U_n()
             ]))}
@@ -545,12 +545,32 @@ class Database:
             )
             """
     
+    def _sql_N_n(self, items):
+        if isinstance(items, Query):
+            return f"""
+                N_n AS ({
+                    items.n
+                })
+                """
+        
+        return ''
+    
     def _sql_X_nj(self, items):
         if isinstance(items, Query):
             return f"""
                 X_nj AS ({
                     ' UNION ALL '.join([
-                    self._sql_transform(feature, concat=True, name=self.j) 
+                    f'''
+                        SELECT 
+                            X.{self.n},
+                            X.{self.j},
+                            X.{self.w}
+                        FROM
+                            N_n,
+                            ({self._sql_transform(feature, concat=True, name=self.j)}) AS X
+                        WHERE
+                            N_n.{self.n} = X.{self.n}
+                    '''
                     for feature in items.x])
                 })
                 """
@@ -576,16 +596,6 @@ class Database:
         
         return ''
 
-    def _sql_N_n(self, items):
-        if isinstance(items, Query):
-            return f"""
-                N_n AS ({
-                    items.n
-                })
-                """
-        
-        return ''
-
     def _sql_W_n(self, sample_weight):
         if isinstance(sample_weight, str):
             return f"""
@@ -600,15 +610,14 @@ class Database:
         return f"""
             XY_njk AS (
                 SELECT
-                    N_n.{self.n} AS {self.n},
+                    X_nj.{self.n} AS {self.n},
                     X_nj.{self.j} AS {self.j},
                     Y_nk.{self.k} AS {self.k},
                     X_nj.{self.w} * Y_nk.{self.w} AS {self.w}
                 FROM
-                    N_n, X_nj, Y_nk
+                    X_nj, Y_nk
                 WHERE
-                    N_n.{self.n} = X_nj.{self.n} AND 
-                    N_n.{self.n} = Y_nk.{self.n}
+                    X_nj.{self.n} = Y_nk.{self.n} 
             )
             """
     
@@ -757,25 +766,7 @@ class Database:
             )
             """
 
-    def _sql_HWX_nk(self, items):
-        if isinstance(items, Query):
-            return f"""
-                HWX_nk AS (
-                    SELECT
-                        N_n.{self.n} AS {self.n},
-                        HW_jk.{self.k} AS {self.k},
-                        {self.SUM}(HW_jk.{self.w} * {self.POW}(X_nj.{self.w}, ABH.a)) AS {self.w}
-                    FROM
-                        N_n, HW_jk, X_nj, ABH
-                    WHERE
-                        N_n.{self.n} = X_nj.{self.n} AND
-                        HW_jk.{self.j} = X_nj.{self.j}
-                    GROUP BY
-                        N_n.{self.n},
-                        HW_jk.{self.k}
-                )
-                """
-        
+    def _sql_HWX_nk(self):        
         return f"""
             HWX_nk AS (
                 SELECT
@@ -822,14 +813,12 @@ class Database:
             return f"""
                 X_n AS (
                     SELECT 
-                        N_n.{self.n} AS {self.n}, 
+                        X_nj.{self.n} AS {self.n}, 
                         {self.SUM}(X_nj.{self.w}) + 0.0 AS {self.w} 
                     FROM 
-                        N_n, X_nj 
-                    WHERE
-                        N_n.{self.n} = X_nj.{self.n}
+                        X_nj 
                     GROUP BY 
-                        N_n.{self.n}
+                        X_nj.{self.n}
                 )
                 """
         
