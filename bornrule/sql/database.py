@@ -589,9 +589,17 @@ class Database:
     def _sql_Y_nk(self, items):
         if isinstance(items, Query):
             return f"""
-                Y_nk AS ({
-                    self._sql_transform(items.y, concat=False, name=self.k)
-                })
+                Y_nk AS (
+                    SELECT 
+                        Y.{self.n},
+                        Y.{self.k},
+                        Y.{self.w}
+                    FROM
+                        N_n,
+                        ({self._sql_transform(items.y, concat=False, name=self.k)}) AS Y
+                    WHERE
+                        N_n.{self.n} = Y.{self.n}
+                )
                 """
         
         return ''
@@ -599,9 +607,16 @@ class Database:
     def _sql_W_n(self, sample_weight):
         if isinstance(sample_weight, str):
             return f"""
-                W_n AS ({
-                    sample_weight
-                })
+                W_n AS (
+                    SELECT 
+                        W.{self.n},
+                        W.{self.w}
+                    FROM
+                        N_n,
+                        ({sample_weight}) AS W
+                    WHERE
+                        N_n.{self.n} = W.{self.n}
+                )
                 """
         
         return ''
