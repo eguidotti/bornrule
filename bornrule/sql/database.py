@@ -483,7 +483,7 @@ class Database:
             {', '.join(filter(None, [                
                 self._sql_N_n(items),
                 self._sql_X_nj(items),
-                self._sql_X_n(items),
+                self._sql_X_n(),
                 self._sql_W_n(sample_weight),
                 self._sql_Z_j(sample_weight)
             ]))}
@@ -823,32 +823,19 @@ class Database:
             )
             """
     
-    def _sql_X_n(self, items):
-        if isinstance(items, Query):
-            return f"""
-                X_n AS (
-                    SELECT 
-                        X_nj.{self.n} AS {self.n}, 
-                        {self.SUM}(X_nj.{self.w}) + 0.0 AS {self.w} 
-                    FROM 
-                        X_nj 
-                    GROUP BY 
-                        X_nj.{self.n}
-                )
-                """
-        
+    def _sql_X_n(self):
         return f"""
             X_n AS (
                 SELECT 
                     {self.n}, 
-                    {self.SUM}({self.w}) AS {self.w} 
+                    {self.SUM}({self.w}) + 0.0 AS {self.w} 
                 FROM 
                     X_nj 
                 GROUP BY 
                     {self.n}
             )
             """
-    
+        
     def _sql_Z_j(self, sample_weight):
         if isinstance(sample_weight, str):
             return f"""
