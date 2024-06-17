@@ -9,7 +9,7 @@ try:
     import cupy
     gpu_support = True
 
-except ModuleNotFoundError:
+except ImportError:
     gpu_support = False
 
 
@@ -222,49 +222,12 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
         X = self._sanitize(X)
         X = self._normalize(X, axis=1)
-        X = self._power(X, self.a)
 
         if sample_weight is not None:
             sample_weight = self._check_sample_weight(sample_weight, X)
             X = self._multiply(X, sample_weight.reshape(-1, 1))
 
-        return self._multiply(self._weights(), self._sum(X, axis=0).T)
-
-        # X = self._sanitize(X)
-        # if sample_weight is not None:
-        #     sample_weight = self._check_sample_weight(sample_weight, X)
-        #
-        # W_jk = self._weights()
-        # X_nj = self._power(X, self.a)
-        # X_nk = X_nj @ W_jk
-        #
-        # if self.gpu_ and self._sparse().issparse(X_nj):
-        #     X_nj = X_nj.tocsc()
-        #
-        # E_jk = 0
-        # for n in range(X.shape[0]):
-        #
-        #     X_j, X_k = X_nj[n:n+1].T, X_nk[n:n+1]
-        #     X_jk = self._multiply(W_jk, X_j)
-        #
-        #     U_k = self._power(X_k, 1. / self.a)
-        #     Y_k = self._normalize(U_k, axis=1)
-        #
-        #     if self._sparse().issparse(X_j):
-        #         Z_j = X_j != 0
-        #         X_k = Z_j @ X_k
-        #         Y_k = Z_j @ Y_k
-        #
-        #     U_jk = self._power(X_k - X_jk, 1. / self.a)
-        #     Y_jk = self._normalize(U_jk, axis=1)
-        #
-        #     D_jk = Y_k - Y_jk
-        #     if sample_weight is not None:
-        #         D_jk = sample_weight[n] * D_jk
-        #
-        #     E_jk += D_jk
-        #
-        # return E_jk if sample_weight is not None else E_jk / X.shape[0]
+        return self._multiply(self._weights(), self._power(self._sum(X, axis=0).T, self.a))
 
     def _dense(self):
         return cupy if self.gpu_ else numpy
