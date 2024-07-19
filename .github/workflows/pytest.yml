@@ -27,8 +27,6 @@ jobs:
           - os: ubuntu-20.04
             python-version: "3.7"
           - os: windows-2022
-            python-version: "3.6"
-          - os: windows-2022
             python-version: "3.7"
 
     runs-on: ${{ matrix.os }}
