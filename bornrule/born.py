@@ -252,7 +252,13 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
 
     def _sum(self, x, axis):
         if self._sparse().issparse(x):
-            return x.sum(axis=axis)
+            x = x.sum(axis=axis)
+            if x.ndim != 1:
+                return x
+            if axis == 0:
+                return x.reshape((1,) + x.shape)            
+            if axis == 1:
+                return x.reshape(x.shape + (1,))
 
         return self._dense().asarray(x).sum(axis=axis, keepdims=True)
 
