@@ -1,6 +1,5 @@
 import pandas as pd
 from collections import defaultdict
-from schema import Schema, Or
 
 try:
     from sqlalchemy import create_engine, String, Integer
@@ -10,6 +9,7 @@ except ModuleNotFoundError:
         "SQLAlchemy required but not installed. "
         "Please install SQLAlchemy with e.g. -> pip install sqlalchemy")
 
+from .schema import Schema, Or
 from .database import Query
 from .sqlite import SQLite
 from .postgresql import PostgreSQL

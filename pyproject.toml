@@ -2,7 +2,7 @@
 name = "bornrule"
 version = "0.3.0"
 license = "GPL-3.0-or-later"
-description = "Classification with Born's rule"
+description = "Implements the Born Classifier"
 authors = ["Emanuele Guidotti <emanuele.guidotti@usi.ch>"]
 readme = "README.min.md"
 repository = "https://github.com/eguidotti/bornrule"
@@ -14,7 +14,6 @@ numpy = ">=1.19.5"
 scipy = ">=1.5.4"
 pandas = ">=1.1.5"
 scikit-learn = ">=0.24.2"
-schema = "^0.7.5"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
