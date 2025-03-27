@@ -6,9 +6,13 @@ from sklearn.utils.multiclass import unique_labels
 from sklearn.exceptions import NotFittedError
 
 try:
+    from sklearn.utils.validation import validate_data
+except ImportError:
+    validate_data = None
+
+try:
     import cupy
     gpu_support = True
-
 except ImportError:
     gpu_support = False
 
@@ -320,11 +324,13 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
                 "dtype": (numpy.float32, numpy.float64)
             }
 
-            if only_X:
-                X = super()._validate_data(X=X, **kwargs)
+            if validate_data is None:
+                validate_data = super()._validate_data
 
+            if only_X:
+                X = validate_data(X=X, **kwargs)
             else:
-                X, y = super()._validate_data(X=X, y=y, multi_output=self._check_encoded(y), **kwargs)
+                X, y = validate_data(X=X, y=y, multi_output=self._check_encoded(y), **kwargs)
 
             if not self._check_non_negative(X):
                 raise ValueError("X must contain non-negative values")
