@@ -337,7 +337,7 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
                     X, y = validate_data(self, X=X, y=y, multi_output=self._check_encoded(y), **kwargs)
 
             if not self._check_non_negative(X):
-                raise ValueError("X must contain non-negative values")
+                raise ValueError("Negative values in data")
 
         return X if only_X else (X, y)
 
@@ -447,3 +447,10 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
                     'Test fails because of negative values in X'
             }
         }
+
+    def __sklearn_tags__(self):
+        tags = super().__sklearn_tags__()
+        tags.input_tags.positive_only = True
+        tags.input_tags.sparse = True
+        tags.classifier_tags.poor_score = True
+        return tags
