@@ -7,8 +7,9 @@ from sklearn.exceptions import NotFittedError
 
 try:
     from sklearn.utils.validation import validate_data
+    use_deprecated_validation = False
 except ImportError:
-    validate_data = None
+    use_deprecated_validation = True
 
 try:
     import cupy
@@ -324,13 +325,15 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
                 "dtype": (numpy.float32, numpy.float64)
             }
 
-            if validate_data is None:
-                validate_data = super()._validate_data
+            if use_deprecated_validation:
+                validate = super()._validate_data
+            else:
+                validate = validate_data
 
             if only_X:
-                X = validate_data(X=X, **kwargs)
+                X = validate(X=X, **kwargs)
             else:
-                X, y = validate_data(X=X, y=y, multi_output=self._check_encoded(y), **kwargs)
+                X, y = validate(X=X, y=y, multi_output=self._check_encoded(y), **kwargs)
 
             if not self._check_non_negative(X):
                 raise ValueError("X must contain non-negative values")
