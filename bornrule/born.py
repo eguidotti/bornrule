@@ -326,14 +326,15 @@ class BornClassifier(ClassifierMixin, BaseEstimator):
             }
 
             if use_deprecated_validation:
-                validate = super()._validate_data
+                if only_X:
+                    X = self._validate_data(X=X, **kwargs)
+                else:
+                    X, y = self._validate_data(X=X, y=y, multi_output=self._check_encoded(y), **kwargs)
             else:
-                validate = validate_data
-
-            if only_X:
-                X = validate(X=X, **kwargs)
-            else:
-                X, y = validate(X=X, y=y, multi_output=self._check_encoded(y), **kwargs)
+                if only_X:
+                    X = validate_data(self, X=X, **kwargs)
+                else:
+                    X, y = validate_data(self, X=X, y=y, multi_output=self._check_encoded(y), **kwargs)
 
             if not self._check_non_negative(X):
                 raise ValueError("X must contain non-negative values")
