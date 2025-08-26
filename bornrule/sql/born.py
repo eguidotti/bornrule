@@ -13,6 +13,7 @@ from .schema import Schema, Or
 from .database import Query
 from .sqlite import SQLite
 from .postgresql import PostgreSQL
+from .mysql import MySQL
 
 
 class BornClassifierSQL:
@@ -111,6 +112,8 @@ class BornClassifierSQL:
             self.db = SQLite(**kwargs)
         elif slug == 'postgresql':
             self.db = PostgreSQL(**kwargs)
+        elif slug == 'mysql':
+            self.db = MySQL(**kwargs)
         else:
             raise ValueError(
                 f"Backend {slug} is not implemented yet. Please open an issue at "

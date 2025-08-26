@@ -55,7 +55,7 @@ class Database:
 
         self.table_params = Table(
             table_params, MetaData(),
-            Column(self.field_id, String, primary_key=True),
+            Column(self.field_id, String(255), primary_key=True),
             Column('a', Float, nullable=False),
             Column('b', Float, nullable=False),
             Column('h', Float, nullable=False),
@@ -248,8 +248,8 @@ class Database:
 
     def write_items(self, con, X):
         table = self.table_temp(
-            Column(self.field_item, Integer, primary_key=True),
             Column(self.field_feature, self.type_feature, primary_key=True),
+            Column(self.field_item, Integer, primary_key=True),
             Column(self.field_weight, Float),
         )
 

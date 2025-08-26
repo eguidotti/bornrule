@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "bornrule"
-version = "0.3.1"
+version = "0.3.2"
 license = "MIT"
 description = "Implements the Born Classifier"
 authors = ["Emanuele Guidotti <emanuele.guidotti@usi.ch>"]
