@@ -59,7 +59,7 @@ A BibTeX entry for LaTeX users is:
 
 ```bibtex
 @inproceedings{guidotti2026bornsql,
-  author    = {Emanuele Guidotti and Darya Shlyk and Stefano Montanelli and Alfio Ferrara},
+  author    = {Guidotti, Emanuele and Shlyk, Darya and Montanelli, Stefano and Ferrara, Alfio},
   title     = {In-Database Text Classification with BornSQL},
   booktitle = {Proceedings of the 29th International Conference on Extending Database Technology (EDBT)},
   year      = {2026},
