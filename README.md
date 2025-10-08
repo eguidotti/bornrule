@@ -12,7 +12,7 @@ pip install bornrule
 
 ## Usage
 
-The package implements three versions of the classifier. The classification algorithm is compatible with the [scikit-learn](https://scikit-learn.org/) ecosystem. The neural version is compatible with [pytorch](https://pytorch.org/). The SQL version supports in-database classification.
+The package implements three versions of the classifier. The classification algorithm is compatible with the [scikit-learn](https://scikit-learn.org/) ecosystem. The neural version is compatible with [pytorch](https://pytorch.org/). The SQL version supports in-database classification currently in PostgreSQL, SQLite, and MySQL.
 
 ### Scikit-Learn
 
