@@ -15,8 +15,8 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from bornrule import BornClassifier
-from .dataset import Dataset
-from .networks import BornSqrt
+from dataset import Dataset
+from networks import BornSqrt
 
 
 class Experiment:
