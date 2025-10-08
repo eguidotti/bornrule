@@ -1,6 +1,6 @@
 # Paper replication
 
-All results in the paper are obtained using Python 3.11.5 and PostgreSQL 12 with MADlib 2.1.0, MySQL 9.4.0, and SQLite 3.50.2 on a Ubuntu 20.04.6 LTS VM server with 32GB RAM and 20 assigned CPU cores. Before proceeding, download the [data](https://doi.org/10.7910/DVN/97LXCA) and unzip them in a folder named `data` in the this directory. 
+All results in the paper are obtained using Python 3.11.5 and SQLite 3.50.2, MySQL 9.4.0, and PostgreSQL 12 with MADlib 2.1.0 on a Ubuntu 20.04.6 LTS VM server with 32GB RAM and 20 assigned CPU cores. Before proceeding, download the [data](https://doi.org/10.7910/DVN/97LXCA) and unzip them in a folder named `data` in the this directory. 
 
 Install all dependencies with [poetry](https://python-poetry.org)
 
