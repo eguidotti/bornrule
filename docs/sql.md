@@ -6,9 +6,8 @@ from bornrule.sql import BornClassifierSQL
 
 !!! warning 
     
-    This SQL implementation is in beta release. 
-    It is compatible with `SQLite v3.24.0+` and `PostgreSQL 14`. 
-    Previous versions of `PostgreSQL` may also work, but they have not been tested.
+    This SQL implementation is compatible with `PostgreSQL 12+`, `SQLite v3.24.0+`, and `MySQL 9.4.0+`. 
+    Earlier versions of `PostgreSQL` and `MySQL` may also work, but they have not been tested. Versions of `SQLite` earlier than `3.24.0` are not supported.
 
 ::: bornrule.sql.BornClassifierSQL
     options:
