@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "bornsql"
+version = "0.1.0"
+description = "In-Database Text Classification with BornSQL"
+authors = ["Emanuele Guidotti <emanuele.guidotti@usi.ch>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+bornrule = "^0.3.2"
+sqlalchemy = "^2.0.31"
+psycopg2-binary = "^2.9.9"
+matplotlib = "^3.9.1"
+seaborn = "^0.13.2"
+pandas = "^2.2.2"
+nltk = "^3.9.1"
+numpy = "^1.0.0"
+bs4 = "^0.0.2"
+pymysql = "^1.1.2"
+cryptography = "^43.0.0"
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

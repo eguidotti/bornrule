@@ -139,3 +139,4 @@ package.json
 package-lock.json
 seminar
 test.db
+edbt/data
