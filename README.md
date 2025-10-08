@@ -1,6 +1,6 @@
 # Classification with Born's Rule
 
-This repository contains the code for the papers [Text Classification with Born's Rule](https://proceedings.neurips.cc/paper_files/paper/2022/hash/c88d0c9bea6230b518ce71268c8e49e0-Abstract-Conference.html) and In-Database Text Classification with BornSQL (EDBT 2026, forthcoming). The code to reproduce the papers is available in the folders `nips` and `edbt`, respectively. The classifier is implemented in python and available on [PyPI](https://pypi.org/project/bornrule/). The complete documentation is available [here](https://bornrule.eguidotti.com).
+This repository contains the code for the papers [Text Classification with Born's Rule](https://proceedings.neurips.cc/paper_files/paper/2022/hash/c88d0c9bea6230b518ce71268c8e49e0-Abstract-Conference.html) and *In-Database Text Classification with BornSQL (EDBT 2026, forthcoming)*. The code to reproduce the papers is available in the folders `nips` and `edbt`, respectively. The classifier is implemented in python and available on [PyPI](https://pypi.org/project/bornrule/). The complete documentation is available [here](https://bornrule.eguidotti.com).
 
 ## Installation
 
