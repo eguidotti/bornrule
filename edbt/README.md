@@ -1,6 +1,8 @@
 # Paper replication
 
-Install all dependencies
+All results in the paper are obtained using Python 3.11.5 and PostgreSQL 12, MySQL 9.4.0, and SQLite 3.50.2 on a Ubuntu 20.04.6 LTS VM server with 32GB RAM and 20 assigned CPU cores. The results can also be replicated on a MacBook Air with an M2 chip and 8 GB RAM. Before proceeding, download the [data](https://doi.org/10.7910/DVN/97LXCA) and unzip them in a folder named `data` in the this directory. 
+
+Install all dependencies with [poetry](https://python-poetry.org)
 
 ```
 poetry install
@@ -48,7 +50,7 @@ Reproduce the results using BornSQL on SQLite
 poetry run python bornsql.py --database <dbname> --dbms sqlite
 ```
 
-All results are stored into an `output/` folder that is generated in the working directory.
+All results are stored into an `output` folder that is generated in the working directory.
 
 
 ## Cite as
