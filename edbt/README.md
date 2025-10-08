@@ -5,7 +5,7 @@ All results in the paper are obtained using Python 3.11.5 and SQLite 3.50.2, MyS
 Install all dependencies with [poetry](https://python-poetry.org)
 
 ```
-poetry install
+poetry install --no-root
 ```
 
 Restore the PostgreSQL database
